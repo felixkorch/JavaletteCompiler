@@ -1,5 +1,5 @@
-#include "gen/ParserError.H"
-#include "gen/Parser.H"
+#include "bnfc/ParserError.H"
+#include "bnfc/Parser.H"
 #include "Validator.h"
 #include "ValidationError.h"
 

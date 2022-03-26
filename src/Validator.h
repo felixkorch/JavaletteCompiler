@@ -1,5 +1,5 @@
 #pragma once
-#include "gen/Absyn.H"
+#include "bnfc/Absyn.H"
 
 
 class Validator : public Visitor

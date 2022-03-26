@@ -1,6 +1,6 @@
 OBJ_DIR = build
 SRC_DIR = src
-GEN_DIR = gen
+GEN_DIR = bnfc
 
 SRC := $(wildcard ${SRC_DIR}/*.cpp)
 HEADERS := $(wildcard ${SRC_DIR}/*.h)
@@ -20,16 +20,15 @@ FLAGS := -c -Wall ${INCLUDES}
 CC:= g++ -g
 
 GRAMMAR_FILE := src/Javalette.cf
-BNFC := bnfc -m --cpp -o gen ${GRAMMAR_FILE}
 MAKE := make
+BNFC := bnfc
+BNFC_CMD := bnfc -m --cpp -o ${GEN_DIR} ${GRAMMAR_FILE}
 
-## EXTERNAL
 FLAGS_BNFC := --ansi -W -Wall -Wsign-conversion -Wno-unused-parameter -Wno-unused-function -Wno-unneeded-internal-declaration
 FLEX=flex
 FLEX_OPTS=-Pjavalette_
 BISON=bison
 BISON_OPTS=-t -pjavalette_
-## EXTERNAL
 
 .PHONY: all clean
 
@@ -41,7 +40,13 @@ clean:
 jcl: ${OBJ}
 	${CC} -o $@ $^
 
+${GEN_SRC}&:
+	${BNFC_CMD}
+
 ${OBJ}: | ${OBJ_DIR}
+
+${OBJ_DIR}:
+	mkdir ${OBJ_DIR}
 
 ${OBJ_DIR}/%.o: src/%.cpp src/%.h ${GEN_HEADERS}
 	${CC} ${FLAGS} -o $@ $<
@@ -49,7 +54,7 @@ ${OBJ_DIR}/%.o: src/%.cpp src/%.h ${GEN_HEADERS}
 ${OBJ_DIR}/Main.o: src/Main.cpp ${GEN_HEADERS}
 	${CC} ${FLAGS} -o $@ $<
 
-## EXTERNAL
+## BNFC Makefile migration
 
 ${OBJ_DIR}/Absyn.o : ${GEN_DIR}/Absyn.C ${GEN_DIR}/Absyn.H
 	${CC} ${FLAGS_BNFC} -c ${GEN_DIR}/Absyn.C -o $@
@@ -73,11 +78,3 @@ ${OBJ_DIR}/Parser.o : ${GEN_DIR}/Parser.C ${GEN_DIR}/Absyn.H ${GEN_DIR}/Bison.H
 
 ${OBJ_DIR}/Printer.o : ${GEN_DIR}/Printer.C ${GEN_DIR}/Printer.H ${GEN_DIR}/Absyn.H 
 	${CC} ${FLAGS_BNFC} -c ${GEN_DIR}/Printer.C -o $@
-
-## EXTERNAL
-	
-${OBJ_DIR}:
-	mkdir ${OBJ_DIR}
-
-${GEN_SRC}&:
-	${BNFC}

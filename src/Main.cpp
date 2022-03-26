@@ -1,6 +1,6 @@
 #include "gen/ParserError.H"
 #include "gen/Parser.H"
-#include "StaticSemantics.h"
+#include "Validator.h"
 #include "ValidationError.h"
 
 #include <cstdio>
@@ -50,7 +50,7 @@ int main(int argc, char ** argv)
         std::cerr << "Parse error on line " << e.getLine() << "\n";
     }
     if (parse_tree) {
-        StaticSemantics* st = new StaticSemantics();
+        Validator* st = new Validator();
         try {
             st->validate(parse_tree);
         }catch(ValidationError &e) {

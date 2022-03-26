@@ -1,13 +1,21 @@
-#MAKEFLAGS += -j2
-OBJDIR := build
-OBJ := $(addprefix $(OBJDIR)/, Main.o StaticSemantics.o Absyn.o Parser.o Lexer.o Buffer.o Printer.o)
-#SOURCE:=src/Main.cpp src/StaticSemantics.cpp gen/Absyn.C gen/Parser.C gen/Lexer.C gen/Buffer.C
-#HEADER:=src/StaticSemantics.h gen/Absyn.H gen/Parser.H gen/Bison.H
+OBJ_DIR = build
+SRC_DIR = src
+GEN_DIR = gen
+
+SRC := $(wildcard ${SRC_DIR}/*.cpp)
+HEADERS := $(wildcard ${SRC_DIR}/*.h)
+
+GEN_SRC := $(addprefix ${GEN_DIR}/, Absyn.C Absyn.H Buffer.C Buffer.H Javalette.l Javalette.y\
+Parser.H ParserError.H Printer.H Printer.C Skeleton.H Skeleton.C Test.C)
+GEN_HEADERS := $(filter ${GEN_DIR}/%.H, $(GEN_SRC))
+
+OBJ := $(patsubst ${SRC_DIR}/%.cpp, ${OBJ_DIR}/%.o, $(SRC))       # SRC object-files
+OBJ += $(addprefix ${OBJ_DIR}/, Absyn.o Buffer.o Lexer.o Parser.o) # BNFC object-files
 
 MAKEFILE_LIST := $(abspath $(lastword $(MAKEFILE_LIST)))
 MAKEFILE_DIR := $(dir $(MAKEFILE_LIST))
 
-INCLUDES := -I ${MAKEFILE_DIR}
+INCLUDES := -I ${MAKEFILE_DIR} ${MAKEFILE_DIR}/src
 FLAGS := -c -Wall ${INCLUDES}
 CC:= g++ -g
 
@@ -23,50 +31,53 @@ BISON=bison
 BISON_OPTS=-t -pjavalette_
 ## EXTERNAL
 
-.PHONY: all clean cleangen
+.PHONY: all clean
 
-all: Javalette
-	
-Javalette: ${OBJ}
-	${CC} -o $@ $^
-
-${OBJ}: | ${OBJDIR}
-
-$(OBJDIR)/%.o: src/%.cpp src/%.h
-	${CC} ${FLAGS} -o $@ $<
-
-### EXT
-
-${OBJDIR}/Absyn.o : gen/Absyn.C gen/Absyn.H
-	${CC} ${FLAGS_BNFC} -c gen/Absyn.C -o $@
-
-${OBJDIR}/Buffer.o : gen/Buffer.C gen/Buffer.H
-	${CC} ${FLAGS_BNFC} -c gen/Buffer.C -o $@
-
-gen/Lexer.C : gen/Javalette.l
-	${FLEX} ${FLEX_OPTS} -o gen/Lexer.C gen/Javalette.l
-
-gen/Parser.C gen/Bison.H : gen/Javalette.y 
-	${BISON} ${BISON_OPTS} gen/Javalette.y -o gen/Parser.C && mv Bison.H gen/
-
-${OBJDIR}/Lexer.o : FLAGS_BNFC+=-Wno-sign-conversion 
-
-${OBJDIR}/Lexer.o : gen/Lexer.C gen/Bison.H 
-	${CC} ${FLAGS_BNFC} -c gen/Lexer.C -o $@
-
-${OBJDIR}/Parser.o : gen/Parser.C gen/Absyn.H gen/Bison.H 
-	${CC} ${FLAGS_BNFC} -c gen/Parser.C -o $@
-
-${OBJDIR}/Printer.o : gen/Printer.C gen/Printer.H gen/Absyn.H 
-	${CC} ${FLAGS_BNFC} -c gen/Printer.C -o $@
-
-### EXT
-	
-${OBJDIR}: | gen
-	mkdir ${OBJDIR}
-
-gen:
-	${BNFC}
+all: jcl
 
 clean:
 	rm -rf gen && rm -rf build
+
+jcl: ${OBJ}
+	${CC} -o $@ $^
+
+${OBJ}: | ${OBJ_DIR}
+
+${OBJ_DIR}/%.o: src/%.cpp src/%.h ${GEN_HEADERS}
+	${CC} ${FLAGS} -o $@ $<
+
+${OBJ_DIR}/Main.o: src/Main.cpp ${GEN_HEADERS}
+	${CC} ${FLAGS} -o $@ $<
+
+## EXTERNAL
+
+${OBJ_DIR}/Absyn.o : ${GEN_DIR}/Absyn.C ${GEN_DIR}/Absyn.H
+	${CC} ${FLAGS_BNFC} -c ${GEN_DIR}/Absyn.C -o $@
+
+${OBJ_DIR}/Buffer.o : ${GEN_DIR}/Buffer.C ${GEN_DIR}/Buffer.H
+	${CC} ${FLAGS_BNFC} -c ${GEN_DIR}/Buffer.C -o $@
+
+${GEN_DIR}/Lexer.C : ${GEN_DIR}/Javalette.l
+	${FLEX} ${FLEX_OPTS} -o ${GEN_DIR}/Lexer.C ${GEN_DIR}/Javalette.l
+
+${GEN_DIR}/Parser.C ${GEN_DIR}/Bison.H &: ${GEN_DIR}/Javalette.y
+	${BISON} ${BISON_OPTS} ${GEN_DIR}/Javalette.y -o ${GEN_DIR}/Parser.C && mv Bison.H ${GEN_DIR}/
+
+${OBJ_DIR}/Lexer.o : FLAGS_BNFC+=-Wno-sign-conversion 
+
+${OBJ_DIR}/Lexer.o : ${GEN_DIR}/Lexer.C ${GEN_DIR}/Bison.H 
+	${CC} ${FLAGS_BNFC} -c ${GEN_DIR}/Lexer.C -o $@
+
+${OBJ_DIR}/Parser.o : ${GEN_DIR}/Parser.C ${GEN_DIR}/Absyn.H ${GEN_DIR}/Bison.H 
+	${CC} ${FLAGS_BNFC} -c ${GEN_DIR}/Parser.C -o $@
+
+${OBJ_DIR}/Printer.o : ${GEN_DIR}/Printer.C ${GEN_DIR}/Printer.H ${GEN_DIR}/Absyn.H 
+	${CC} ${FLAGS_BNFC} -c ${GEN_DIR}/Printer.C -o $@
+
+## EXTERNAL
+	
+${OBJ_DIR}:
+	mkdir ${OBJ_DIR}
+
+${GEN_SRC}&:
+	${BNFC}

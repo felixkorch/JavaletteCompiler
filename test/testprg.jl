@@ -4,7 +4,7 @@ int main()
     return 0;
 }
 
-int main(int in)
+int main2(int in)
 {
      return in + 1;
 }

@@ -1,1 +1,6 @@
 .vscode
+.idea
+bnfc
+gen
+jcl
+build

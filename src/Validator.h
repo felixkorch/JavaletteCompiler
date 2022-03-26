@@ -2,7 +2,7 @@
 #include "gen/Absyn.H"
 
 
-class StaticSemantics : public Visitor
+class Validator : public Visitor
 {
 public:
   void visitProg(Prog *p);

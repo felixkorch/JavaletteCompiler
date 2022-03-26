@@ -1,25 +1,25 @@
-#include "StaticSemantics.h"
+#include "Validator.h"
 #include "ValidationError.h"
 
-void StaticSemantics::visitProg(Prog *t) {} //abstract class
-void StaticSemantics::visitTopDef(TopDef *t) {} //abstract class
-void StaticSemantics::visitArg(Arg *t) {} //abstract class
-void StaticSemantics::visitBlk(Blk *t) {} //abstract class
-void StaticSemantics::visitStmt(Stmt *t) {} //abstract class
-void StaticSemantics::visitItem(Item *t) {} //abstract class
-void StaticSemantics::visitType(Type *t) {} //abstract class
-void StaticSemantics::visitExpr(Expr *t) {} //abstract class
-void StaticSemantics::visitAddOp(AddOp *t) {} //abstract class
-void StaticSemantics::visitMulOp(MulOp *t) {} //abstract class
-void StaticSemantics::visitRelOp(RelOp *t) {} //abstract class
+void Validator::visitProg(Prog *t) {} //abstract class
+void Validator::visitTopDef(TopDef *t) {} //abstract class
+void Validator::visitArg(Arg *t) {} //abstract class
+void Validator::visitBlk(Blk *t) {} //abstract class
+void Validator::visitStmt(Stmt *t) {} //abstract class
+void Validator::visitItem(Item *t) {} //abstract class
+void Validator::visitType(Type *t) {} //abstract class
+void Validator::visitExpr(Expr *t) {} //abstract class
+void Validator::visitAddOp(AddOp *t) {} //abstract class
+void Validator::visitMulOp(MulOp *t) {} //abstract class
+void Validator::visitRelOp(RelOp *t) {} //abstract class
 
-Visitable* StaticSemantics::validate(Visitable* program)
+Visitable* Validator::validate(Visitable* program)
 {
   program->accept(this);
   return program;
 }
 
-void StaticSemantics::visitProgram(Program *program)
+void Validator::visitProgram(Program *program)
 {
   ListTopDef* list_top_def = program->listtopdef_; // List of functions
   bool mainExists = false;
@@ -35,9 +35,9 @@ void StaticSemantics::visitProgram(Program *program)
   if (program->listtopdef_) program->listtopdef_->accept(this);
 }
 
-void StaticSemantics::visitFnDef(FnDef *fn_def)
+void Validator::visitFnDef(FnDef *fn_def)
 {
-  /* Code For FnDef Goes Here */
+  printf("HEY FN\n");
 
   if (fn_def->type_) fn_def->type_->accept(this);
   visitIdent(fn_def->ident_);
@@ -46,7 +46,7 @@ void StaticSemantics::visitFnDef(FnDef *fn_def)
 
 }
 
-void StaticSemantics::visitArgument(Argument *argument)
+void Validator::visitArgument(Argument *argument)
 {
   /* Code For Argument Goes Here */
 
@@ -55,7 +55,7 @@ void StaticSemantics::visitArgument(Argument *argument)
 
 }
 
-void StaticSemantics::visitBlock(Block *block)
+void Validator::visitBlock(Block *block)
 {
   /* Code For Block Goes Here */
 
@@ -63,14 +63,14 @@ void StaticSemantics::visitBlock(Block *block)
 
 }
 
-void StaticSemantics::visitEmpty(Empty *empty)
+void Validator::visitEmpty(Empty *empty)
 {
   /* Code For Empty Goes Here */
 
 
 }
 
-void StaticSemantics::visitBStmt(BStmt *b_stmt)
+void Validator::visitBStmt(BStmt *b_stmt)
 {
   /* Code For BStmt Goes Here */
 
@@ -78,7 +78,7 @@ void StaticSemantics::visitBStmt(BStmt *b_stmt)
 
 }
 
-void StaticSemantics::visitDecl(Decl *decl)
+void Validator::visitDecl(Decl *decl)
 {
   /* Code For Decl Goes Here */
 
@@ -87,7 +87,7 @@ void StaticSemantics::visitDecl(Decl *decl)
 
 }
 
-void StaticSemantics::visitAss(Ass *ass)
+void Validator::visitAss(Ass *ass)
 {
   /* Code For Ass Goes Here */
 
@@ -96,7 +96,7 @@ void StaticSemantics::visitAss(Ass *ass)
 
 }
 
-void StaticSemantics::visitIncr(Incr *incr)
+void Validator::visitIncr(Incr *incr)
 {
   /* Code For Incr Goes Here */
 
@@ -104,7 +104,7 @@ void StaticSemantics::visitIncr(Incr *incr)
 
 }
 
-void StaticSemantics::visitDecr(Decr *decr)
+void Validator::visitDecr(Decr *decr)
 {
   /* Code For Decr Goes Here */
 
@@ -112,7 +112,7 @@ void StaticSemantics::visitDecr(Decr *decr)
 
 }
 
-void StaticSemantics::visitRet(Ret *ret)
+void Validator::visitRet(Ret *ret)
 {
   /* Code For Ret Goes Here */
 
@@ -120,14 +120,14 @@ void StaticSemantics::visitRet(Ret *ret)
 
 }
 
-void StaticSemantics::visitVRet(VRet *v_ret)
+void Validator::visitVRet(VRet *v_ret)
 {
   /* Code For VRet Goes Here */
 
 
 }
 
-void StaticSemantics::visitCond(Cond *cond)
+void Validator::visitCond(Cond *cond)
 {
   /* Code For Cond Goes Here */
 
@@ -136,7 +136,7 @@ void StaticSemantics::visitCond(Cond *cond)
 
 }
 
-void StaticSemantics::visitCondElse(CondElse *cond_else)
+void Validator::visitCondElse(CondElse *cond_else)
 {
   /* Code For CondElse Goes Here */
 
@@ -146,7 +146,7 @@ void StaticSemantics::visitCondElse(CondElse *cond_else)
 
 }
 
-void StaticSemantics::visitWhile(While *while_)
+void Validator::visitWhile(While *while_)
 {
   /* Code For While Goes Here */
 
@@ -155,7 +155,7 @@ void StaticSemantics::visitWhile(While *while_)
 
 }
 
-void StaticSemantics::visitSExp(SExp *s_exp)
+void Validator::visitSExp(SExp *s_exp)
 {
   /* Code For SExp Goes Here */
 
@@ -163,7 +163,7 @@ void StaticSemantics::visitSExp(SExp *s_exp)
 
 }
 
-void StaticSemantics::visitNoInit(NoInit *no_init)
+void Validator::visitNoInit(NoInit *no_init)
 {
   /* Code For NoInit Goes Here */
 
@@ -171,7 +171,7 @@ void StaticSemantics::visitNoInit(NoInit *no_init)
 
 }
 
-void StaticSemantics::visitInit(Init *init)
+void Validator::visitInit(Init *init)
 {
   /* Code For Init Goes Here */
 
@@ -180,35 +180,35 @@ void StaticSemantics::visitInit(Init *init)
 
 }
 
-void StaticSemantics::visitInt(Int *int_)
+void Validator::visitInt(Int *int_)
 {
   /* Code For Int Goes Here */
 
 
 }
 
-void StaticSemantics::visitDoub(Doub *doub)
+void Validator::visitDoub(Doub *doub)
 {
   /* Code For Doub Goes Here */
 
 
 }
 
-void StaticSemantics::visitBool(Bool *bool_)
+void Validator::visitBool(Bool *bool_)
 {
   /* Code For Bool Goes Here */
 
 
 }
 
-void StaticSemantics::visitVoid(Void *void_)
+void Validator::visitVoid(Void *void_)
 {
   /* Code For Void Goes Here */
 
 
 }
 
-void StaticSemantics::visitFun(Fun *fun)
+void Validator::visitFun(Fun *fun)
 {
   /* Code For Fun Goes Here */
 
@@ -217,7 +217,7 @@ void StaticSemantics::visitFun(Fun *fun)
 
 }
 
-void StaticSemantics::visitEVar(EVar *e_var)
+void Validator::visitEVar(EVar *e_var)
 {
   /* Code For EVar Goes Here */
 
@@ -225,7 +225,7 @@ void StaticSemantics::visitEVar(EVar *e_var)
 
 }
 
-void StaticSemantics::visitELitInt(ELitInt *e_lit_int)
+void Validator::visitELitInt(ELitInt *e_lit_int)
 {
   /* Code For ELitInt Goes Here */
 
@@ -233,7 +233,7 @@ void StaticSemantics::visitELitInt(ELitInt *e_lit_int)
 
 }
 
-void StaticSemantics::visitELitDoub(ELitDoub *e_lit_doub)
+void Validator::visitELitDoub(ELitDoub *e_lit_doub)
 {
   /* Code For ELitDoub Goes Here */
 
@@ -241,21 +241,21 @@ void StaticSemantics::visitELitDoub(ELitDoub *e_lit_doub)
 
 }
 
-void StaticSemantics::visitELitTrue(ELitTrue *e_lit_true)
+void Validator::visitELitTrue(ELitTrue *e_lit_true)
 {
   /* Code For ELitTrue Goes Here */
 
 
 }
 
-void StaticSemantics::visitELitFalse(ELitFalse *e_lit_false)
+void Validator::visitELitFalse(ELitFalse *e_lit_false)
 {
   /* Code For ELitFalse Goes Here */
 
 
 }
 
-void StaticSemantics::visitEApp(EApp *e_app)
+void Validator::visitEApp(EApp *e_app)
 {
   /* Code For EApp Goes Here */
 
@@ -264,7 +264,7 @@ void StaticSemantics::visitEApp(EApp *e_app)
 
 }
 
-void StaticSemantics::visitEString(EString *e_string)
+void Validator::visitEString(EString *e_string)
 {
   /* Code For EString Goes Here */
 
@@ -272,7 +272,7 @@ void StaticSemantics::visitEString(EString *e_string)
 
 }
 
-void StaticSemantics::visitNeg(Neg *neg)
+void Validator::visitNeg(Neg *neg)
 {
   /* Code For Neg Goes Here */
 
@@ -280,7 +280,7 @@ void StaticSemantics::visitNeg(Neg *neg)
 
 }
 
-void StaticSemantics::visitNot(Not *not_)
+void Validator::visitNot(Not *not_)
 {
   /* Code For Not Goes Here */
 
@@ -288,7 +288,7 @@ void StaticSemantics::visitNot(Not *not_)
 
 }
 
-void StaticSemantics::visitEMul(EMul *e_mul)
+void Validator::visitEMul(EMul *e_mul)
 {
   /* Code For EMul Goes Here */
 
@@ -298,7 +298,7 @@ void StaticSemantics::visitEMul(EMul *e_mul)
 
 }
 
-void StaticSemantics::visitEAdd(EAdd *e_add)
+void Validator::visitEAdd(EAdd *e_add)
 {
   /* Code For EAdd Goes Here */
 
@@ -308,7 +308,7 @@ void StaticSemantics::visitEAdd(EAdd *e_add)
 
 }
 
-void StaticSemantics::visitERel(ERel *e_rel)
+void Validator::visitERel(ERel *e_rel)
 {
   /* Code For ERel Goes Here */
 
@@ -318,7 +318,7 @@ void StaticSemantics::visitERel(ERel *e_rel)
 
 }
 
-void StaticSemantics::visitEAnd(EAnd *e_and)
+void Validator::visitEAnd(EAnd *e_and)
 {
   /* Code For EAnd Goes Here */
 
@@ -327,7 +327,7 @@ void StaticSemantics::visitEAnd(EAnd *e_and)
 
 }
 
-void StaticSemantics::visitEOr(EOr *e_or)
+void Validator::visitEOr(EOr *e_or)
 {
   /* Code For EOr Goes Here */
 
@@ -336,77 +336,77 @@ void StaticSemantics::visitEOr(EOr *e_or)
 
 }
 
-void StaticSemantics::visitPlus(Plus *plus)
+void Validator::visitPlus(Plus *plus)
 {
   /* Code For Plus Goes Here */
 
 
 }
 
-void StaticSemantics::visitMinus(Minus *minus)
+void Validator::visitMinus(Minus *minus)
 {
   /* Code For Minus Goes Here */
 
 
 }
 
-void StaticSemantics::visitTimes(Times *times)
+void Validator::visitTimes(Times *times)
 {
   /* Code For Times Goes Here */
 
 
 }
 
-void StaticSemantics::visitDiv(Div *div)
+void Validator::visitDiv(Div *div)
 {
   /* Code For Div Goes Here */
 
 
 }
 
-void StaticSemantics::visitMod(Mod *mod)
+void Validator::visitMod(Mod *mod)
 {
   /* Code For Mod Goes Here */
 
 
 }
 
-void StaticSemantics::visitLTH(LTH *lth)
+void Validator::visitLTH(LTH *lth)
 {
   /* Code For LTH Goes Here */
 
 
 }
 
-void StaticSemantics::visitLE(LE *le)
+void Validator::visitLE(LE *le)
 {
   /* Code For LE Goes Here */
 
 
 }
 
-void StaticSemantics::visitGTH(GTH *gth)
+void Validator::visitGTH(GTH *gth)
 {
   /* Code For GTH Goes Here */
 
 
 }
 
-void StaticSemantics::visitGE(GE *ge)
+void Validator::visitGE(GE *ge)
 {
   /* Code For GE Goes Here */
 
 
 }
 
-void StaticSemantics::visitEQU(EQU *equ)
+void Validator::visitEQU(EQU *equ)
 {
   /* Code For EQU Goes Here */
 
 
 }
 
-void StaticSemantics::visitNE(NE *ne)
+void Validator::visitNE(NE *ne)
 {
   /* Code For NE Goes Here */
 
@@ -414,7 +414,7 @@ void StaticSemantics::visitNE(NE *ne)
 }
 
 
-void StaticSemantics::visitListTopDef(ListTopDef *list_top_def)
+void Validator::visitListTopDef(ListTopDef *list_top_def)
 {
   for (ListTopDef::iterator i = list_top_def->begin() ; i != list_top_def->end() ; ++i)
   {
@@ -422,7 +422,7 @@ void StaticSemantics::visitListTopDef(ListTopDef *list_top_def)
   }
 }
 
-void StaticSemantics::visitListArg(ListArg *list_arg)
+void Validator::visitListArg(ListArg *list_arg)
 {
   for (ListArg::iterator i = list_arg->begin() ; i != list_arg->end() ; ++i)
   {
@@ -430,7 +430,7 @@ void StaticSemantics::visitListArg(ListArg *list_arg)
   }
 }
 
-void StaticSemantics::visitListStmt(ListStmt *list_stmt)
+void Validator::visitListStmt(ListStmt *list_stmt)
 {
   for (ListStmt::iterator i = list_stmt->begin() ; i != list_stmt->end() ; ++i)
   {
@@ -438,7 +438,7 @@ void StaticSemantics::visitListStmt(ListStmt *list_stmt)
   }
 }
 
-void StaticSemantics::visitListItem(ListItem *list_item)
+void Validator::visitListItem(ListItem *list_item)
 {
   for (ListItem::iterator i = list_item->begin() ; i != list_item->end() ; ++i)
   {
@@ -446,7 +446,7 @@ void StaticSemantics::visitListItem(ListItem *list_item)
   }
 }
 
-void StaticSemantics::visitListType(ListType *list_type)
+void Validator::visitListType(ListType *list_type)
 {
   for (ListType::iterator i = list_type->begin() ; i != list_type->end() ; ++i)
   {
@@ -454,7 +454,7 @@ void StaticSemantics::visitListType(ListType *list_type)
   }
 }
 
-void StaticSemantics::visitListExpr(ListExpr *list_expr)
+void Validator::visitListExpr(ListExpr *list_expr)
 {
   for (ListExpr::iterator i = list_expr->begin() ; i != list_expr->end() ; ++i)
   {
@@ -463,27 +463,27 @@ void StaticSemantics::visitListExpr(ListExpr *list_expr)
 }
 
 
-void StaticSemantics::visitInteger(Integer x)
+void Validator::visitInteger(Integer x)
 {
   /* Code for Integer Goes Here */
 }
 
-void StaticSemantics::visitChar(Char x)
+void Validator::visitChar(Char x)
 {
   /* Code for Char Goes Here */
 }
 
-void StaticSemantics::visitDouble(Double x)
+void Validator::visitDouble(Double x)
 {
   /* Code for Double Goes Here */
 }
 
-void StaticSemantics::visitString(String x)
+void Validator::visitString(String x)
 {
   /* Code for String Goes Here */
 }
 
-void StaticSemantics::visitIdent(Ident x)
+void Validator::visitIdent(Ident x)
 {
   /* Code for Ident Goes Here */
 }

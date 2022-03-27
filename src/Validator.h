@@ -1,82 +1,91 @@
 #pragma once
 #include "bnfc/Absyn.H"
+#include "bnfc/Skeleton.H"
+#include "ValidationError.h"
+#include <unordered_map>
+#include <algorithm>
+#include <list>
 
+namespace TypeNS {
+    enum class Type {
+        INT, DOUBLE, BOOLEAN, VOID, ERROR
+    };
+}
 
-class Validator : public Visitor
-{
+struct FunctionType {
+    std::list<TypeNS::Type> args;
+    TypeNS::Type returnType;
+};
+
+// Can have multiple functions, however, only one right now (the env is the function)
+class Env {
+    using ScopeType = std::unordered_map<std::string, TypeNS::Type>; // Var -> Type
+
+    std::unordered_map<std::string, FunctionType> signatures_;
+    std::list<ScopeType> scopes_;
+
 public:
-  void visitProg(Prog *p);
-  void visitTopDef(TopDef *p);
-  void visitArg(Arg *p);
-  void visitBlk(Blk *p);
-  void visitStmt(Stmt *p);
-  void visitItem(Item *p);
-  void visitType(Type *p);
-  void visitExpr(Expr *p);
-  void visitAddOp(AddOp *p);
-  void visitMulOp(MulOp *p);
-  void visitRelOp(RelOp *p);
-  void visitProgram(Program *p);
-  void visitFnDef(FnDef *p);
-  void visitArgument(Argument *p);
-  void visitBlock(Block *p);
-  void visitEmpty(Empty *p);
-  void visitBStmt(BStmt *p);
-  void visitDecl(Decl *p);
-  void visitNoInit(NoInit *p);
-  void visitInit(Init *p);
-  void visitAss(Ass *p);
-  void visitIncr(Incr *p);
-  void visitDecr(Decr *p);
-  void visitRet(Ret *p);
-  void visitVRet(VRet *p);
-  void visitCond(Cond *p);
-  void visitCondElse(CondElse *p);
-  void visitWhile(While *p);
-  void visitSExp(SExp *p);
-  void visitInt(Int *p);
-  void visitDoub(Doub *p);
-  void visitBool(Bool *p);
-  void visitVoid(Void *p);
-  void visitFun(Fun *p);
-  void visitEVar(EVar *p);
-  void visitELitInt(ELitInt *p);
-  void visitELitDoub(ELitDoub *p);
-  void visitELitTrue(ELitTrue *p);
-  void visitELitFalse(ELitFalse *p);
-  void visitEApp(EApp *p);
-  void visitEString(EString *p);
-  void visitNeg(Neg *p);
-  void visitNot(Not *p);
-  void visitEMul(EMul *p);
-  void visitEAdd(EAdd *p);
-  void visitERel(ERel *p);
-  void visitEAnd(EAnd *p);
-  void visitEOr(EOr *p);
-  void visitPlus(Plus *p);
-  void visitMinus(Minus *p);
-  void visitTimes(Times *p);
-  void visitDiv(Div *p);
-  void visitMod(Mod *p);
-  void visitLTH(LTH *p);
-  void visitLE(LE *p);
-  void visitGTH(GTH *p);
-  void visitGE(GE *p);
-  void visitEQU(EQU *p);
-  void visitNE(NE *p);
-  void visitListTopDef(ListTopDef *p);
-  void visitListArg(ListArg *p);
-  void visitListStmt(ListStmt *p);
-  void visitListItem(ListItem *p);
-  void visitListType(ListType *p);
-  void visitListExpr(ListExpr *p);
+    void enterScope() { scopes_.push_front(ScopeType()); }
+    void exitScope() { scopes_.pop_front(); }
 
-  void visitInteger(Integer x);
-  void visitChar(Char x);
-  void visitDouble(Double x);
-  void visitString(String x);
-  void visitIdent(Ident x);
+    void addSignature(const std::string& fnName, const FunctionType& t)
+    {
+        bool ok = signatures_.insert({fnName, t}).second; // succeeds => second = true
+        if(!ok)
+            throw TypeError("Function with name '" + fnName + "' already exists");
+    }
 
-  Visitable* validate(Visitable* prg);
+    TypeNS::Type findVar(const std::string& var)
+    {
+        for(auto scope : scopes_) {
+            auto search = scope.find(var); // O(1)
+            if(search != scope.end())
+                return search->second; // second: Type
+        }
+        throw ValidationError("Variable '" + var + "' not declared");
+    }
+
+    void addVar(const std::string& name, TypeNS::Type t)
+    {
+        ScopeType& currentScope = scopes_.front();
+        bool ok = currentScope.insert({ name, t }).second; // succeeds => second = true
+        if(!ok)
+            throw ValidationError("Duplicate variable '" + name + "' in scope");
+    }
+};
+
+class TypeInferrer : public Skeleton {
+    Env& env_;
+public:
+    TypeNS::Type t;
+    explicit TypeInferrer(Env& env): env_(env), t(TypeNS::Type::ERROR) {}
+
+    void visitInt(Int *p) override { t = TypeNS::Type::INT; }
+    void visitDoub(Doub *p) override { t = TypeNS::Type::DOUBLE; }
+    void visitBool(Bool *p) override { t = TypeNS::Type::BOOLEAN; }
+    void visitVoid(Void *p) override { t = TypeNS::Type::VOID; }
+};
+
+
+class Validator : public Skeleton {
+    std::list<Env> envs_;
+    Env globalCtx_;
+public:
+
+    Visitable* validate(Program* prg);
+    void checkFn() {}
+    void checkStmt() {}
+    void checkExp() {}
+    void addEnv() { envs_.push_front(Env()); }
+
+    TypeNS::Type inferExp(Expr* expr)
+    {
+        TypeInferrer inferrer(envs_.front());
+        expr->accept(&inferrer);
+        return inferrer.t;
+    }
+
+    void visitListTopDef(ListTopDef *p) override;
+    void visitFnDef(FnDef *p) override;
 
 };

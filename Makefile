@@ -10,7 +10,7 @@ Parser.H ParserError.H Printer.H Printer.C Skeleton.H Skeleton.C Test.C)
 GEN_HEADERS := $(filter ${GEN_DIR}/%.H, $(GEN_SRC))
 
 OBJ := $(patsubst ${SRC_DIR}/%.cpp, ${OBJ_DIR}/%.o, $(SRC))       # SRC object-files
-OBJ += $(addprefix ${OBJ_DIR}/, Absyn.o Buffer.o Lexer.o Parser.o) # BNFC object-files
+OBJ += $(addprefix ${OBJ_DIR}/, Absyn.o Buffer.o Lexer.o Parser.o Printer.o Skeleton.o) # BNFC object-files
 
 MAKEFILE_LIST := $(abspath $(lastword $(MAKEFILE_LIST)))
 MAKEFILE_DIR := $(dir $(MAKEFILE_LIST))

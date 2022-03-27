@@ -34,6 +34,9 @@ BISON_OPTS=-t -pjavalette_
 
 all: jcl
 
+debug: FLAGS += -DDEBUG -g
+debug: jcl
+
 clean:
 	rm -rf gen && rm -rf build
 
@@ -78,3 +81,6 @@ ${OBJ_DIR}/Parser.o : ${GEN_DIR}/Parser.C ${GEN_DIR}/Absyn.H ${GEN_DIR}/Bison.H
 
 ${OBJ_DIR}/Printer.o : ${GEN_DIR}/Printer.C ${GEN_DIR}/Printer.H ${GEN_DIR}/Absyn.H 
 	${CC} ${FLAGS_BNFC} -c ${GEN_DIR}/Printer.C -o $@
+
+${OBJ_DIR}/Skeleton.o : ${GEN_DIR}/Skeleton.C ${GEN_DIR}/Skeleton.H ${GEN_DIR}/Absyn.H
+	${CC} ${FLAGS_BNFC} -c ${GEN_DIR}/Skeleton.C -o $@

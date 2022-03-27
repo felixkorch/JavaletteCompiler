@@ -21,19 +21,11 @@ struct FunctionType {
 class Env {
     using ScopeType = std::unordered_map<std::string, TypeNS::Type>; // Var -> Type
 
-    std::unordered_map<std::string, FunctionType> signatures_;
     std::list<ScopeType> scopes_;
 
 public:
     void enterScope() { scopes_.push_front(ScopeType()); }
     void exitScope() { scopes_.pop_front(); }
-
-    void addSignature(const std::string& fnName, const FunctionType& t)
-    {
-        bool ok = signatures_.insert({fnName, t}).second; // succeeds => second = true
-        if(!ok)
-            throw TypeError("Function with name '" + fnName + "' already exists");
-    }
 
     TypeNS::Type findVar(const std::string& var)
     {
@@ -57,35 +49,54 @@ public:
 class TypeInferrer : public Skeleton {
     Env& env_;
 public:
-    TypeNS::Type t;
-    explicit TypeInferrer(Env& env): env_(env), t(TypeNS::Type::ERROR) {}
+    std::list<TypeNS::Type> t;
+    explicit TypeInferrer(Env& env): env_(env) {}
 
-    void visitInt(Int *p) override { t = TypeNS::Type::INT; }
-    void visitDoub(Doub *p) override { t = TypeNS::Type::DOUBLE; }
-    void visitBool(Bool *p) override { t = TypeNS::Type::BOOLEAN; }
-    void visitVoid(Void *p) override { t = TypeNS::Type::VOID; }
+    void visitInt(Int *p) override { t.push_back(TypeNS::Type::INT); }
+    void visitDoub(Doub *p) override { t.push_back(TypeNS::Type::DOUBLE); }
+    void visitBool(Bool *p) override { t.push_back(TypeNS::Type::BOOLEAN); }
+    void visitVoid(Void *p) override { t.push_back(TypeNS::Type::VOID); }
+    void visitListArg(ListArg *p) override
+    {
+        for(auto it : *p)
+            it->accept(this);
+    }
+
+    void visitArgument(Argument *p) override
+    {
+        p->type_->accept(this);
+    }
 };
 
 
 class Validator : public Skeleton {
     std::list<Env> envs_;
     Env globalCtx_;
+    std::unordered_map<std::string, FunctionType> signatures_;
 public:
 
-    Visitable* validate(Program* prg);
+    Visitable* validate(Prog* prg);
     void checkFn() {}
     void checkStmt() {}
     void checkExp() {}
     void addEnv() { envs_.push_front(Env()); }
 
+    void addSignature(const std::string& fnName, const FunctionType& t)
+    {
+        bool ok = signatures_.insert({fnName, t}).second; // succeeds => second = true
+        if(!ok)
+            throw TypeError("Function with name '" + fnName + "' already exists");
+    }
+
     TypeNS::Type inferExp(Expr* expr)
     {
         TypeInferrer inferrer(envs_.front());
         expr->accept(&inferrer);
-        return inferrer.t;
+        return inferrer.t.front();
     }
 
     void visitListTopDef(ListTopDef *p) override;
     void visitFnDef(FnDef *p) override;
+    void visitProgram(Program *p) override;
 
 };

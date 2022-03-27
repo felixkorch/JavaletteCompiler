@@ -1,10 +1,10 @@
 #include "Validator.h"
 #include "ValidationError.h"
 
-Visitable* Validator::validate(Program* program)
+Visitable* Validator::validate(Prog* p)
 {
-    program->listtopdef_->accept(this);
-    return program;
+    p->accept(this);
+    return p;
 }
 
 void Validator::visitListTopDef(ListTopDef *p)
@@ -15,8 +15,17 @@ void Validator::visitListTopDef(ListTopDef *p)
 
 void Validator::visitFnDef(FnDef *p)
 {
-    TypeInferrer typeInferrer(globalCtx_);
-    p->type_->accept(&typeInferrer);
-    FunctionType t = { {typeInferrer.t}, p-> }
-    globalCtx_.addSignature(p->ident);
+    TypeInferrer getReturnVal(globalCtx_);
+    p->type_->accept(&getReturnVal);
+    TypeNS::Type returnVal = getReturnVal.t.front();
+
+    TypeInferrer getArgs(globalCtx_);
+    p->listarg_->accept(&getArgs);
+    std::list<TypeNS::Type> args = getReturnVal.t;
+
+    addSignature(p->ident_, { args, returnVal });
+}
+
+void Validator::visitProgram(Program *p) {
+    p->listtopdef_->accept(this);
 }

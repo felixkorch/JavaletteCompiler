@@ -1,10 +1,10 @@
-int main()
+int test()
 {
     int a, b;
     return 0;
 }
 
-int main2(int in)
+int test(int in)
 {
      return in + 1;
 }

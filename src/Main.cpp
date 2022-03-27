@@ -56,6 +56,9 @@ int main(int argc, char ** argv)
         }catch(ValidationError &e) {
             std::cerr << e.what() << "\n";
             return 1;
+        }catch(TypeError &e) {
+            std::cerr << e.what() << "\n";
+            return 1;
         }
         printf("Program is valid!\n");
         delete st;

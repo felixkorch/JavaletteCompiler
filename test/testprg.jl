@@ -1,4 +1,9 @@
 int test(double z)
 {
-    int a = 2 + 3.2;
+    z = 2 + 3;
+}
+
+int test(double z)
+{
+    z = 2 + 3;
 }

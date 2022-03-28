@@ -1,6 +1,7 @@
 #pragma once
 #include "bnfc/Absyn.H"
 #include "bnfc/Skeleton.H"
+#include "bnfc/Printer.h"
 #include "ValidationError.h"
 #include <unordered_map>
 #include <algorithm>
@@ -8,8 +9,19 @@
 
 namespace TypeNS {
     enum class Type {
-        INT, DOUBLE, BOOLEAN, VOID, ERROR
+        INT = 0, DOUBLE, BOOLEAN, VOID, ERROR
     };
+
+    const char * toString(TypeNS::Type t)
+    {
+        switch(t) {
+            case Type::INT: return "int"; break;
+            case Type::DOUBLE: return "double"; break;
+            case Type::BOOLEAN: return "bool"; break;
+            case Type::VOID: return "void"; break;
+            default: return "errorType"; break;
+        }
+    }
 }
 
 struct FunctionType {
@@ -52,27 +64,43 @@ public:
     }
 };
 
-class TypeInferrer : public Skeleton {
+using BaseVisitor = Skeleton;
+
+template <class ValueType, class VisitableType, class VisitorImpl>
+class ValueGetter {
+protected:
+    ValueType v;
+public:
+    static ValueType getValue(VisitableType* p, Env& env)
+    {
+        VisitorImpl visitor(env);
+        p->accept(&visitor);
+        return visitor.v;
+    }
+};
+
+class TypeInferrer : public BaseVisitor, public ValueGetter<TypeNS::Type, Visitable, TypeInferrer> {
     Env& env_;
 public:
-    std::list<TypeNS::Type> t; // TODO: Maybe have two versions of this class, one with single type one with multiple
     explicit TypeInferrer(Env& env): env_(env) {}
 
-    void visitInt(Int *p) override { t.push_back(TypeNS::Type::INT); }
-    void visitDoub(Doub *p) override { t.push_back(TypeNS::Type::DOUBLE); }
-    void visitBool(Bool *p) override { t.push_back(TypeNS::Type::BOOLEAN); }
-    void visitVoid(Void *p) override { t.push_back(TypeNS::Type::VOID); }
+    void visitInt(Int *p) override { v = TypeNS::Type::INT; }
+    void visitDoub(Doub *p) override { v = TypeNS::Type::DOUBLE; }
+    void visitBool(Bool *p) override { v = TypeNS::Type::BOOLEAN; }
+    void visitVoid(Void *p) override { v = TypeNS::Type::VOID; }
+    void visitELitInt(ELitInt *p) override { v = TypeNS::Type::INT; }
+    void visitELitDoub(ELitDoub *p) override { v = TypeNS::Type::DOUBLE; }
+    void visitELitFalse(ELitFalse *p) override { v = TypeNS::Type::BOOLEAN; }
+    void visitELitTrue(ELitTrue *p) override { v = TypeNS::Type::BOOLEAN; }
+    void visitEVar(EVar *p) override { v = env_.findVar(p->ident_); }
 
+    void visitArgument(Argument *p) override { p->type_->accept(this); }
     void visitListArg(ListArg *p) override
     {
         for(auto it : *p)
             it->accept(this);
     }
 
-    void visitArgument(Argument *p) override
-    {
-        p->type_->accept(this);
-    }
 
     void visitListItem(ListItem *p) override
     {
@@ -80,44 +108,19 @@ public:
             it->accept(this);
     }
 
-    void visitELitInt(ELitInt *p) override
-    {
-        t.push_back(TypeNS::Type::INT);
-    }
-
-    void visitELitDoub(ELitDoub *p) override
-    {
-        t.push_back(TypeNS::Type::DOUBLE);
-    }
-
-    void visitELitFalse(ELitFalse *p) override
-    {
-        t.push_back(TypeNS::Type::BOOLEAN);
-    }
-
-    void visitELitTrue(ELitTrue *p) override
-    {
-        t.push_back(TypeNS::Type::BOOLEAN);
-    }
-
-    void visitEVar(EVar *p) override
-    {
-        auto varType = env_.findVar(p->ident_);
-        t.push_back(varType);
-    }
-
     void visitEAdd(EAdd *p) override
     {
-        p->expr_1->accept(this);
-        p->expr_2->accept(this);
-        auto expr1 = t.begin();
-        auto expr2 = std::next(expr1);
-        if(*expr1 != *expr2)
-            throw TypeError("Types in add operation not matching");
+        auto expr1Type = TypeInferrer::getValue(p->expr_1, env_);
+        auto expr2Type = TypeInferrer::getValue(p->expr_2, env_);
+
+        if(expr1Type != expr2Type)
+            throw TypeError("Types in add operation not matching"); // TODO: Pretty Printer
+
+        v = expr1Type;
     }
 };
 
-class DeclHandler : public Skeleton {
+class DeclHandler : public BaseVisitor {
     Env& env_;
     TypeNS::Type t;
 public:
@@ -125,10 +128,7 @@ public:
 
     void visitDecl(Decl *p) override
     {
-        TypeInferrer getDeclType(env_);
-        p->type_->accept(&getDeclType);
-        t = getDeclType.t.front(); // TODO: front() throws if empty container (should not be empty but just in case)
-
+        t = TypeInferrer::getValue(p->type_, env_);
         p->listitem_->accept(this);
     }
 
@@ -141,9 +141,7 @@ public:
     void visitInit(Init *p) override
     {
         env_.addVar(p->ident_, t);
-        TypeInferrer getExprType(env_);
-        p->expr_->accept(&getExprType);
-        TypeNS::Type exprType = getExprType.t.front();
+        auto exprType = TypeInferrer::getValue(p->expr_, env_);
         if(t != exprType)
             throw TypeError("Decl of type does not match expr"); // TODO: Pretty Printer
     }
@@ -155,10 +153,11 @@ public:
 
 };
 
-class StatementChecker : public Skeleton {
+class StatementChecker : public BaseVisitor {
     Env& env_;
+    PrintAbsyn printer_;
 public:
-    explicit StatementChecker(Env& env): env_(env) {}
+    explicit StatementChecker(Env& env): env_(env), printer_() {}
 
     void visitBStmt(BStmt *p) override
     {
@@ -198,12 +197,20 @@ public:
 
     void visitAss(Ass *p) override
     {
+        auto assType = env_.findVar(p->ident_);
+        auto exprType = TypeInferrer::getValue(p->expr_, env_);
 
+        if (assType != exprType) {
+            const std::string v = printer_.print(p->expr_);
+            throw TypeError(v + " has type " + TypeNS::toString(exprType)
+                                   + ", expected " + TypeNS::toString(assType)
+                                   + " for variable " + p->ident_);
+        }
     }
 
 };
 
-class FunctionChecker : public Skeleton {
+class FunctionChecker : public BaseVisitor {
     Env& env_;
 public:
     explicit FunctionChecker(Env& env): env_(env) {}
@@ -231,15 +238,12 @@ public:
 
     void visitArgument(Argument *p) override
     {
-        TypeInferrer getArg(env_);
-        p->type_->accept(&getArg);
-        TypeNS::Type argType = getArg.t.front();
-
+        auto argType = TypeInferrer::getValue(p->type_, env_);
         env_.addVar(p->ident_, argType);
     }
 };
 
-class Validator : public Skeleton {
+class Validator : public BaseVisitor {
     std::list<Env> envs_;
     Env globalCtx_;
     std::unordered_map<std::string, FunctionType> signatures_;
@@ -255,14 +259,7 @@ public:
     {
         bool ok = signatures_.insert({fnName, t}).second; // succeeds => second = true
         if(!ok)
-            throw TypeError("Function with name '" + fnName + "' already exists");
-    }
-
-    TypeNS::Type inferExp(Expr* expr)
-    {
-        TypeInferrer inferrer(envs_.front());
-        expr->accept(&inferrer);
-        return inferrer.t.front();
+            throw TypeError("Duplicate function with name: " + fnName);
     }
 
     void visitListTopDef(ListTopDef *p) override;

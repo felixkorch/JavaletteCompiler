@@ -26,13 +26,11 @@ void Validator::visitListTopDef(ListTopDef *p)
 
 void Validator::visitFnDef(FnDef *p)
 {
-    TypeInferrer getReturnVal(globalCtx_);
-    p->type_->accept(&getReturnVal);
-    TypeNS::Type returnVal = getReturnVal.t.front();
+    auto returnVal = TypeInferrer::getValue(p->type_, globalCtx_);
+    std::list<TypeNS::Type> args;
 
-    TypeInferrer getArgs(globalCtx_);
-    p->listarg_->accept(&getArgs);
-    std::list<TypeNS::Type> args = getArgs.t;
+    for(auto it : *p->listarg_)
+        args.push_back(TypeInferrer::getValue(it, globalCtx_));
 
     addSignature(p->ident_, { args, returnVal });
 }

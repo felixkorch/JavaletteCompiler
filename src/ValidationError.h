@@ -22,7 +22,7 @@ class TypeError : public std::exception {
 public:
     TypeError(const std::string& msg)
     {
-        msg_ = "Javalette Type error: \"" + msg + "\"";
+        msg_ = "Javalette Type error: " + msg;
     }
 
     const char * what () const throw ()

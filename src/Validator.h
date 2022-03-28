@@ -16,16 +16,7 @@ namespace TypeNS {
         LTH , LE, GTH, GE, EQU, NE
     };
 
-    std::string toString(TypeNS::Type t)
-    {
-        switch(t) {
-            case Type::INT: return "int"; break;
-            case Type::DOUBLE: return "double"; break;
-            case Type::BOOLEAN: return "bool"; break;
-            case Type::VOID: return "void"; break;
-            default: return "errorType"; break;
-        }
-    }
+    std::string toString(TypeNS::Type t);
 }
 
 struct FunctionType {
@@ -37,14 +28,19 @@ class Env {
     using ScopeType = std::unordered_map<std::string, TypeNS::Type>; // Var -> Type
 
     std::list<ScopeType> scopes_;
+    std::unordered_map<std::string, FunctionType> signatures_;
 
 public:
     void enterScope() { scopes_.push_front(ScopeType()); }
     void exitScope() { scopes_.pop_front(); }
 
-    Env()
+    // In the future: could enter scope in constructor to allow global vars
+
+    void addSignature(const std::string& fnName, const FunctionType& t)
     {
-        enterScope();
+        bool ok = signatures_.insert({fnName, t}).second; // succeeds => second = true
+        if(!ok)
+            throw TypeError("Duplicate function with name: " + fnName);
     }
 
     // Called when it's used in an expression, if it doesn't exist, throw
@@ -55,7 +51,15 @@ public:
             if(search != scope.end())
                 return search->second; // second: Type
         }
-        throw ValidationError("Variable '" + var + "' not declared");
+        throw ValidationError("Variable '" + var + "' not declared in this context");
+    }
+
+    FunctionType findFn(const std::string& fn)
+    {
+        auto search = signatures_.find(fn);
+        if(search != signatures_.end())
+            return search->second; // second: FunctionType
+        throw ValidationError("Function '" + fn + "' does not exist");
     }
 
     void addVar(const std::string& name, TypeNS::Type t)
@@ -114,6 +118,7 @@ class TypeInferrer : public BaseVisitor, public ValueGetter<TypeNS::Type, Visita
         return false;
     }
 
+    // TODO: RENAME
     void BinaryExpression(Expr* e1, Expr* e2, const std::string& op,
                           std::initializer_list<TypeNS::Type> allowedTypes)
     {
@@ -224,6 +229,27 @@ public:
 
     void visitEApp(EApp *p) override
     {
+        FunctionType fnType = env_.findFn(p->ident_);
+        int listLength = p->listexpr_->size(); // Nr of args provided
+        int argLength  =  fnType.args.size(); // Actual nr of args
+
+        if(listLength != argLength) {
+            throw TypeError("Function " + p->ident_ + " requires " + std::to_string(argLength) +
+                            " args, but " + std::to_string(listLength) + " was provided");
+        }
+
+        auto itList = p->listexpr_->begin();
+        auto itArg = fnType.args.begin();
+        auto itListEnd = p->listexpr_->end();
+        auto itArgEnd = fnType.args.end();
+        for(;itList != itListEnd && itArg != itArgEnd; ++itList, ++itArg) {
+            auto exprType = TypeInferrer::getValue(*itList, env_);
+            if(exprType != *itArg) {
+                throw TypeError("In call to fn " + p->ident_ + ", expected arg " +
+                                TypeNS::toString(*itArg) + ", but got " + TypeNS::toString(exprType));
+            }
+        }
+        v = fnType.returnType;
     }
 };
 
@@ -266,17 +292,72 @@ public:
 class StatementChecker : public BaseVisitor {
     Env& env_;
     PrintAbsyn printer_;
+    TypeNS::Type retType_;
+    int retCount_;
 public:
-    explicit StatementChecker(Env& env): env_(env), printer_() {}
+    StatementChecker(Env& env): env_(env), printer_() {}
+
+    void visitFnDef(FnDef *p) override
+    {
+        retType_ = env_.findFn(p->ident_).returnType;
+        retCount_ = 0;
+    }
 
     void visitBStmt(BStmt *p) override
     {
-
+        env_.enterScope();
+        p->blk_->accept(this);
+        env_.exitScope();
     }
 
     void visitEmpty(Empty *p) override
     {
 
+    }
+
+    void visitDecr(Decr *p) override
+    {
+        auto varType = env_.findVar(p->ident_);
+        if(varType != TypeNS::Type::INT) {
+            throw TypeError("Cannot decrement " + p->ident_ + " of type " +
+                            TypeNS::toString(varType) + ", expected type int");
+        }
+    }
+
+    void visitIncr(Incr *p) override
+    {
+        auto varType = env_.findVar(p->ident_);
+        if(varType != TypeNS::Type::INT) {
+            throw TypeError("Cannot increment " + p->ident_ + " of type " +
+                            TypeNS::toString(varType) + ", expected type int");
+        }
+    }
+
+    void visitCond(Cond *p) override
+    {
+        auto exprType = TypeInferrer::getValue(p->expr_, env_);
+        if(exprType != TypeNS::Type::BOOLEAN)
+            throw TypeError("Expected boolean in cond, got " + toString(exprType));
+    }
+
+    void visitCondElse(CondElse *p) override
+    {
+        auto exprType = TypeInferrer::getValue(p->expr_, env_);
+        if(exprType != TypeNS::Type::BOOLEAN)
+            throw TypeError("Expected boolean in cond, got " + toString(exprType));
+    }
+
+    void visitWhile(While *p) override
+    {
+        auto exprType = TypeInferrer::getValue(p->expr_, env_);
+        if(exprType != TypeNS::Type::BOOLEAN)
+            throw TypeError("Expected boolean in cond, got " + toString(exprType));
+    }
+
+    void visitBlock(Block *p) override
+    {
+        for(auto it : *p->liststmt_)
+            it->accept(this);
     }
 
     void visitDecl(Decl *p) override
@@ -303,6 +384,8 @@ public:
     {
         for(auto it : *p)
             it->accept(this);
+        if(retCount_ < 1)
+            throw TypeError("Function needs at least one return statement");
     }
 
     void visitAss(Ass *p) override
@@ -318,26 +401,43 @@ public:
         }
     }
 
+    void visitRet(Ret *p) override
+    {
+        ++retCount_;
+        auto exprType = TypeInferrer::getValue(p->expr_, env_);
+        if(exprType != retType_)
+            throw TypeError("Ret type wrong");
+    }
+
+    void visitVRet(VRet *p) override
+    {
+        ++retCount_;
+        if(TypeNS::Type::VOID != retType_)
+            throw TypeError("Ret type wrong");
+    }
+
 };
 
 class FunctionChecker : public BaseVisitor {
     Env& env_;
+    StatementChecker statementChecker;
     PrintAbsyn printer_; // TODO: Maybe have a common printer across classes
 public:
-    explicit FunctionChecker(Env& env): env_(env), printer_() {}
+    FunctionChecker(Env& env): env_(env), statementChecker(env), printer_() {}
 
     void visitFnDef(FnDef *p) override
     {
+        p->accept(&statementChecker); // Let statementChecker know about the ret type
+
+        env_.enterScope();
         p->listarg_->accept(this);
         p->blk_->accept(this);
+        env_.exitScope();
     }
 
     void visitBlock(Block *p) override
     {
-        env_.enterScope();
-        StatementChecker statementChecker(env_);
         p->liststmt_->accept(&statementChecker);
-        env_.exitScope();
     }
 
 
@@ -355,23 +455,13 @@ public:
 };
 
 class Validator : public BaseVisitor {
-    std::list<Env> envs_;
-    Env globalCtx_;
-    std::unordered_map<std::string, FunctionType> signatures_;
+    Env env_;
 public:
-
+    Validator():env_() {}
     Visitable* validate(Prog* prg);
     void checkFn() {}
     void checkStmt() {}
     void checkExp() {}
-    void addEnv() { envs_.push_front(Env()); }
-
-    void addSignature(const std::string& fnName, const FunctionType& t)
-    {
-        bool ok = signatures_.insert({fnName, t}).second; // succeeds => second = true
-        if(!ok)
-            throw TypeError("Duplicate function with name: " + fnName);
-    }
 
     void visitListTopDef(ListTopDef *p) override;
     void visitFnDef(FnDef *p) override;

@@ -7,10 +7,21 @@ Visitable* Validator::validate(Prog* p)
     return p;
 }
 
+void Validator::visitProgram(Program *p) {
+    p->listtopdef_->accept(this);
+}
+
+
 void Validator::visitListTopDef(ListTopDef *p)
 {
     for(auto a : *p)
         a->accept(this);
+
+    for(auto a : *p) {
+        addEnv();
+        FunctionChecker fnChecker(envs_.front());
+        a->accept(&fnChecker);
+    }
 }
 
 void Validator::visitFnDef(FnDef *p)
@@ -21,11 +32,7 @@ void Validator::visitFnDef(FnDef *p)
 
     TypeInferrer getArgs(globalCtx_);
     p->listarg_->accept(&getArgs);
-    std::list<TypeNS::Type> args = getReturnVal.t;
+    std::list<TypeNS::Type> args = getArgs.t;
 
     addSignature(p->ident_, { args, returnVal });
-}
-
-void Validator::visitProgram(Program *p) {
-    p->listtopdef_->accept(this);
 }

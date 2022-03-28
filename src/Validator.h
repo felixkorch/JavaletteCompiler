@@ -27,6 +27,12 @@ public:
     void enterScope() { scopes_.push_front(ScopeType()); }
     void exitScope() { scopes_.pop_front(); }
 
+    Env()
+    {
+        enterScope();
+    }
+
+    // Called when it's used in an expression, if it doesn't exist, throw
     TypeNS::Type findVar(const std::string& var)
     {
         for(auto scope : scopes_) {
@@ -49,13 +55,14 @@ public:
 class TypeInferrer : public Skeleton {
     Env& env_;
 public:
-    std::list<TypeNS::Type> t;
+    std::list<TypeNS::Type> t; // TODO: Maybe have two versions of this class, one with single type one with multiple
     explicit TypeInferrer(Env& env): env_(env) {}
 
     void visitInt(Int *p) override { t.push_back(TypeNS::Type::INT); }
     void visitDoub(Doub *p) override { t.push_back(TypeNS::Type::DOUBLE); }
     void visitBool(Bool *p) override { t.push_back(TypeNS::Type::BOOLEAN); }
     void visitVoid(Void *p) override { t.push_back(TypeNS::Type::VOID); }
+
     void visitListArg(ListArg *p) override
     {
         for(auto it : *p)
@@ -66,8 +73,171 @@ public:
     {
         p->type_->accept(this);
     }
+
+    void visitListItem(ListItem *p) override
+    {
+        for(auto it : *p)
+            it->accept(this);
+    }
+
+    void visitELitInt(ELitInt *p) override
+    {
+        t.push_back(TypeNS::Type::INT);
+    }
+
+    void visitELitDoub(ELitDoub *p) override
+    {
+        t.push_back(TypeNS::Type::DOUBLE);
+    }
+
+    void visitELitFalse(ELitFalse *p) override
+    {
+        t.push_back(TypeNS::Type::BOOLEAN);
+    }
+
+    void visitELitTrue(ELitTrue *p) override
+    {
+        t.push_back(TypeNS::Type::BOOLEAN);
+    }
+
+    void visitEVar(EVar *p) override
+    {
+        auto varType = env_.findVar(p->ident_);
+        t.push_back(varType);
+    }
+
+    void visitEAdd(EAdd *p) override
+    {
+        p->expr_1->accept(this);
+        p->expr_2->accept(this);
+        auto expr1 = t.begin();
+        auto expr2 = std::next(expr1);
+        if(*expr1 != *expr2)
+            throw TypeError("Types in add operation not matching");
+    }
 };
 
+class DeclHandler : public Skeleton {
+    Env& env_;
+    TypeNS::Type t;
+public:
+    explicit DeclHandler(Env& env): env_(env), t(TypeNS::Type::ERROR) {}
+
+    void visitDecl(Decl *p) override
+    {
+        TypeInferrer getDeclType(env_);
+        p->type_->accept(&getDeclType);
+        t = getDeclType.t.front(); // TODO: front() throws if empty container (should not be empty but just in case)
+
+        p->listitem_->accept(this);
+    }
+
+    void visitListItem(ListItem *p) override
+    {
+        for(auto it : *p)
+            it->accept(this);
+    }
+
+    void visitInit(Init *p) override
+    {
+        env_.addVar(p->ident_, t);
+        TypeInferrer getExprType(env_);
+        p->expr_->accept(&getExprType);
+        TypeNS::Type exprType = getExprType.t.front();
+        if(t != exprType)
+            throw TypeError("Decl of type does not match expr"); // TODO: Pretty Printer
+    }
+
+    void visitNoInit(NoInit *p) override
+    {
+        env_.addVar(p->ident_, t);
+    }
+
+};
+
+class StatementChecker : public Skeleton {
+    Env& env_;
+public:
+    explicit StatementChecker(Env& env): env_(env) {}
+
+    void visitBStmt(BStmt *p) override
+    {
+
+    }
+
+    void visitEmpty(Empty *p) override
+    {
+
+    }
+
+    void visitDecl(Decl *p) override
+    {
+        DeclHandler declHandler(env_);
+        p->accept(&declHandler);
+    }
+
+    void visitListItem(ListItem *p) override
+    {
+    }
+
+    void visitInit(Init *p) override
+    {
+
+    }
+
+    void visitNoInit(NoInit *p) override
+    {
+
+    }
+
+    void visitListStmt(ListStmt *p) override
+    {
+        for(auto it : *p)
+            it->accept(this);
+    }
+
+    void visitAss(Ass *p) override
+    {
+
+    }
+
+};
+
+class FunctionChecker : public Skeleton {
+    Env& env_;
+public:
+    explicit FunctionChecker(Env& env): env_(env) {}
+
+    void visitFnDef(FnDef *p) override
+    {
+        p->listarg_->accept(this);
+        p->blk_->accept(this);
+    }
+
+    void visitBlock(Block *p) override
+    {
+        env_.enterScope();
+        StatementChecker statementChecker(env_);
+        p->liststmt_->accept(&statementChecker);
+        env_.exitScope();
+    }
+
+
+    void visitListArg(ListArg *p) override
+    {
+        for(auto it : *p)
+            it->accept(this);
+    }
+
+    void visitArgument(Argument *p) override
+    {
+        TypeInferrer getArg(env_);
+        p->type_->accept(&getArg);
+        TypeNS::Type argType = getArg.t.front();
+
+        env_.addVar(p->ident_, argType);
+    }
+};
 
 class Validator : public Skeleton {
     std::list<Env> envs_;

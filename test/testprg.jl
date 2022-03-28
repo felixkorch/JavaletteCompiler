@@ -1,10 +1,4 @@
-int test()
+int test(double z)
 {
-    int a, b;
-    return 0;
-}
-
-int test(int in)
-{
-     return in + 1;
+    int a = 2 + 3.2;
 }

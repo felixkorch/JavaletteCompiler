@@ -24,15 +24,20 @@ struct FunctionType {
     TypeNS::Type returnType;
 };
 
+using ScopeType = std::unordered_map<std::string, TypeNS::Type>; // Map of (Var -> Type)
+using SignatureType = std::pair<std::string, FunctionType>;      // Pair   (name, FunctionType)
+
 class Env {
-    using ScopeType = std::unordered_map<std::string, TypeNS::Type>; // Var -> Type
 
     std::list<ScopeType> scopes_;
     std::unordered_map<std::string, FunctionType> signatures_;
+    SignatureType currentFn_;
 
 public:
     void enterScope() { scopes_.push_front(ScopeType()); }
     void exitScope() { scopes_.pop_front(); }
+    void enterFn(const std::string& fnName) { currentFn_ = { fnName, findFn(fnName) }; }
+    SignatureType& getCurrentFunction() { return currentFn_; }
 
     // In the future: could enter scope in constructor to allow global vars
 
@@ -54,7 +59,7 @@ public:
         throw ValidationError("Variable '" + var + "' not declared in this context");
     }
 
-    FunctionType findFn(const std::string& fn)
+    FunctionType& findFn(const std::string& fn)
     {
         auto search = signatures_.find(fn);
         if(search != signatures_.end())
@@ -289,19 +294,14 @@ public:
 
 };
 
+// For now it checks a sequence of statements for the same visitor-object
 class StatementChecker : public BaseVisitor {
     Env& env_;
     PrintAbsyn printer_;
-    TypeNS::Type retType_;
+    SignatureType currentFn_;
     int retCount_;
 public:
     StatementChecker(Env& env): env_(env), printer_() {}
-
-    void visitFnDef(FnDef *p) override
-    {
-        retType_ = env_.findFn(p->ident_).returnType;
-        retCount_ = 0;
-    }
 
     void visitBStmt(BStmt *p) override
     {
@@ -338,6 +338,8 @@ public:
         auto exprType = TypeInferrer::getValue(p->expr_, env_);
         if(exprType != TypeNS::Type::BOOLEAN)
             throw TypeError("Expected boolean in cond, got " + toString(exprType));
+
+        p->stmt_->accept(this);
     }
 
     void visitCondElse(CondElse *p) override
@@ -345,6 +347,9 @@ public:
         auto exprType = TypeInferrer::getValue(p->expr_, env_);
         if(exprType != TypeNS::Type::BOOLEAN)
             throw TypeError("Expected boolean in cond, got " + toString(exprType));
+
+        p->stmt_1->accept(this);
+        p->stmt_2->accept(this);
     }
 
     void visitWhile(While *p) override
@@ -352,6 +357,8 @@ public:
         auto exprType = TypeInferrer::getValue(p->expr_, env_);
         if(exprType != TypeNS::Type::BOOLEAN)
             throw TypeError("Expected boolean in cond, got " + toString(exprType));
+
+        p->expr_->accept(this);
     }
 
     void visitBlock(Block *p) override
@@ -382,6 +389,10 @@ public:
 
     void visitListStmt(ListStmt *p) override
     {
+        // TODO: Move to constructor if the responsibility of this visitor stays the same
+        // Entrypoint for checking a sequence of statements
+        retCount_ = 0;
+        currentFn_ = env_.getCurrentFunction();
         for(auto it : *p)
             it->accept(this);
         if(retCount_ < 1)
@@ -405,15 +416,21 @@ public:
     {
         ++retCount_;
         auto exprType = TypeInferrer::getValue(p->expr_, env_);
-        if(exprType != retType_)
-            throw TypeError("Ret type wrong");
+        if(exprType != currentFn_.second.returnType) { // TODO: Make variable names better
+            throw TypeError("Expected return type for function " + currentFn_.first +
+                            " is " + TypeNS::toString(currentFn_.second.returnType) +
+                            ", but got " + TypeNS::toString(exprType));
+        }
     }
 
     void visitVRet(VRet *p) override
     {
         ++retCount_;
-        if(TypeNS::Type::VOID != retType_)
-            throw TypeError("Ret type wrong");
+        if(TypeNS::Type::VOID != currentFn_.second.returnType) { // TODO: Make variable names better
+            throw TypeError("Expected return type for function " + currentFn_.first +
+                            " is " + TypeNS::toString(currentFn_.second.returnType) +
+                            ", but got " + TypeNS::toString(TypeNS::Type::VOID));
+        }
     }
 
 };
@@ -427,8 +444,7 @@ public:
 
     void visitFnDef(FnDef *p) override
     {
-        p->accept(&statementChecker); // Let statementChecker know about the ret type
-
+        env_.enterFn(p->ident_);
         env_.enterScope();
         p->listarg_->accept(this);
         p->blk_->accept(this);

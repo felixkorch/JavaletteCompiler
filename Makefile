@@ -16,7 +16,7 @@ MAKEFILE_LIST := $(abspath $(lastword $(MAKEFILE_LIST)))
 MAKEFILE_DIR := $(dir $(MAKEFILE_LIST))
 
 INCLUDES := -I ${MAKEFILE_DIR} ${MAKEFILE_DIR}/src
-FLAGS := -c -Wall ${INCLUDES}
+FLAGS := -c -std=c++11 -Wall ${INCLUDES}
 CC:= g++ -g
 
 GRAMMAR_FILE := src/Javalette.cf

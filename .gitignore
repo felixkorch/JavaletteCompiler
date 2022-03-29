@@ -4,3 +4,7 @@ bnfc
 gen
 jcl
 build
+
+## Mac specific
+
+.DS_Store

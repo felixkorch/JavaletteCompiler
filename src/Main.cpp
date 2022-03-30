@@ -11,7 +11,6 @@ int main(int argc, char ** argv)
     FILE *input;
     char *filename = nullptr;
 
-
     filename = argv[1];
 
     if (filename) {

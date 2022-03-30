@@ -50,7 +50,7 @@ public:
     void addVar(const std::string& name, TypeCode t);
 };
 
-// Creates an alias which makes more sense.
+// Creates an alias that makes more sense.
 using BaseVisitor = Skeleton;
 
 // This class adds the ability to extend the Visitor interface by using templates, which makes it

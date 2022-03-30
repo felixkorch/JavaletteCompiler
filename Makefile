@@ -31,7 +31,7 @@ CC:= g++ -g
 GRAMMAR_FILE := src/Javalette.cf
 MAKE := make
 BNFC := bnfc
-BNFC_CMD := bnfc -m --cpp -o $(GEN_DIR) $(GRAMMAR_FILE)
+BNFC_CMD := bnfc -m -l -p bnfc --cpp -o $(GEN_DIR) $(GRAMMAR_FILE)
 
 FLAGS_BNFC := --ansi -W -Wall -Wsign-conversion -Wno-unused-parameter -Wno-unused-function -Wno-unneeded-internal-declaration
 FLEX=flex
@@ -47,7 +47,7 @@ debug: FLAGS += -DDEBUG -g
 debug: jcl
 
 clean:
-	rm -rf $(GEN_DIR) && rm -rf build
+	rm -rf $(GEN_DIR) build bin
 
 test: $(OBJ) $(TEST_OBJ) | $(BIN_DIR)
 	$(CC) -o $(BIN_DIR)/$@ $^

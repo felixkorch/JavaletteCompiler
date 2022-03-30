@@ -1,13 +1,10 @@
 OBJ_DIR = build
 SRC_DIR = src
 GEN_DIR = bnfc
-TEST_DIR = test
 BIN_DIR = bin
 
 MAIN_FILE = Main
-TEST_FILE = Test
 
-TEST_SRC = $(TEST_DIR)/$(TEST_FILE).cpp
 MAIN_SRC = $(SRC_DIR)/$(MAIN_FILE).cpp
 COMMON_SRC := $(filter-out $(MAIN_SRC), $(wildcard $(SRC_DIR)/*.cpp))
 HEADERS := $(wildcard $(SRC_DIR)/*.h)
@@ -19,7 +16,6 @@ GEN_HEADERS := $(filter $(GEN_DIR)/%.H, $(GEN_SRC))
 OBJ := $(patsubst $(SRC_DIR)/%.cpp, $(OBJ_DIR)/%.o, $(COMMON_SRC))       # COMMON_SRC object-files
 OBJ += $(addprefix $(OBJ_DIR)/, Absyn.o Buffer.o Lexer.o Parser.o Printer.o Skeleton.o) # BNFC object-files
 MAIN_OBJ = $(OBJ_DIR)/$(MAIN_FILE).o
-TEST_OBJ = $(OBJ_DIR)/$(TEST_FILE).o
 
 MAKEFILE_LIST := $(abspath $(lastword $(MAKEFILE_LIST)))
 MAKEFILE_DIR := $(dir $(MAKEFILE_LIST))
@@ -49,9 +45,6 @@ debug: jcl
 clean:
 	rm -rf $(GEN_DIR) build bin
 
-test: $(OBJ) $(TEST_OBJ) | $(BIN_DIR)
-	$(CC) -o $(BIN_DIR)/$@ $^
-
 jcl: $(OBJ) $(MAIN_OBJ) | $(BIN_DIR)
 	$(CC) -o $(BIN_DIR)/$@ $^
 
@@ -70,9 +63,6 @@ $(OBJ_DIR)/%.o: src/%.cpp src/%.h $(GEN_HEADERS) $(HEADERS)
 	$(CC) $(FLAGS) -o $@ $<
 
 $(MAIN_OBJ): $(MAIN_SRC) $(GEN_HEADERS) $(HEADERS)
-	$(CC) $(FLAGS) -o $@ $<
-
-$(TEST_OBJ): $(TEST_SRC) $(GEN_HEADERS) $(HEADERS)
 	$(CC) $(FLAGS) -o $@ $<
 
 ## BNFC Makefile migration

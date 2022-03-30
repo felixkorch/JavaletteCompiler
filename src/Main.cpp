@@ -53,9 +53,6 @@ int main(int argc, char ** argv)
         Validator* st = new Validator();
         try {
             st->validate(parse_tree);
-        }catch(ValidationError &e) {
-            std::cerr << e.what() << "\n";
-            return 1;
         }catch(TypeError &e) {
             std::cerr << e.what() << "\n";
             return 1;

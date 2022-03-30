@@ -36,7 +36,7 @@ workspace "JavaletteCompiler"
         "bnfc/**.H"
     }
 
-    removefiles { "Main.cpp" }
+    removefiles { "src/Main.cpp" }
 
     includedirs
     {
@@ -77,7 +77,7 @@ workspace "JavaletteCompiler"
 
     files
     {
-        "sandbox/Main.cpp"
+        "sandbox/Box1.cpp"
     }
 
     includedirs

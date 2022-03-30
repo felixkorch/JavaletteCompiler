@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <list>
 
+using namespace bnfc;
+
 namespace TypeNS {
     enum class Type {
         INT, DOUBLE, BOOLEAN, VOID, ERROR
@@ -36,7 +38,7 @@ class Env {
 public:
     void enterScope() { scopes_.push_front(ScopeType()); }
     void exitScope() { scopes_.pop_front(); }
-    void enterFn(const std::string& fnName) { currentFn_ = { fnName, findFn(fnName) }; }
+    void enterFn(const std::string& fnName) { currentFn_ = { fnName, findFn(fnName, -1, -1) }; }
     SignatureType& getCurrentFunction() { return currentFn_; }
 
     // In the future: could enter scope in constructor to allow global vars
@@ -49,22 +51,22 @@ public:
     }
 
     // Called when it's used in an expression, if it doesn't exist, throw
-    TypeNS::Type findVar(const std::string& var)
+    TypeNS::Type findVar(const std::string& var, int lineNr, int charNr)
     {
         for(auto scope : scopes_) {
             auto search = scope.find(var); // O(1)
             if(search != scope.end())
                 return search->second; // second: Type
         }
-        throw ValidationError("Variable '" + var + "' not declared in this context");
+        throw TypeError("Variable '" + var + "' not declared in this context", lineNr, charNr);
     }
 
-    FunctionType& findFn(const std::string& fn)
+    FunctionType& findFn(const std::string& fn, int lineNr, int charNr)
     {
         auto search = signatures_.find(fn);
         if(search != signatures_.end())
             return search->second; // second: FunctionType
-        throw ValidationError("Function '" + fn + "' does not exist");
+        throw TypeError("Function '" + fn + "' does not exist", lineNr, charNr);
     }
 
     void addVar(const std::string& name, TypeNS::Type t)
@@ -72,7 +74,7 @@ public:
         ScopeType& currentScope = scopes_.front();
         bool ok = currentScope.insert({ name, t }).second; // succeeds => second = true
         if(!ok)
-            throw ValidationError("Duplicate variable '" + name + "' in scope");
+            throw TypeError("Duplicate variable '" + name + "' in scope");
     }
 };
 
@@ -116,7 +118,7 @@ class TypeInferrer : public BaseVisitor, public ValueGetter<TypeNS::Type, Visita
     Env& env_;
     PrintAbsyn printer_;
 
-    bool typeIn(TypeNS::Type t, std::initializer_list<TypeNS::Type> list)
+    static bool typeIn(TypeNS::Type t, std::initializer_list<TypeNS::Type> list)
     {
         for(auto elem : list)
             if(t == elem) return true;
@@ -124,8 +126,8 @@ class TypeInferrer : public BaseVisitor, public ValueGetter<TypeNS::Type, Visita
     }
 
     // TODO: RENAME
-    void BinaryExpression(Expr* e1, Expr* e2, const std::string& op,
-                          std::initializer_list<TypeNS::Type> allowedTypes)
+    void checkBinExp(Expr* e1, Expr* e2, const std::string& op,
+                     std::initializer_list<TypeNS::Type> allowedTypes)
     {
         auto expr1Type = TypeInferrer::getValue(e1, env_);
         auto expr2Type = TypeInferrer::getValue(e2, env_);
@@ -137,21 +139,22 @@ class TypeInferrer : public BaseVisitor, public ValueGetter<TypeNS::Type, Visita
         if(expr1Type != expr2Type) {
             const std::string expr1Str = printer_.print(e1);
             const std::string expr2Str = printer_.print(e2);
-            throw TypeError("Incompatible types " + expr1Str + ", " + expr2Str);
+            throw TypeError("Incompatible types " + expr1Str
+                            + ", " + expr2Str, e1->line_number, e1->char_number);
         }
     }
 
-    void UnaryExpression(Expr* e, const std::string& op,
-                         std::initializer_list<TypeNS::Type> allowedTypes)
+    void checkUnExp(Expr* e, const std::string& op,
+                    std::initializer_list<TypeNS::Type> allowedTypes)
     {
         auto expr1Type = TypeInferrer::getValue(e, env_);
 
         if(!typeIn(expr1Type, allowedTypes))
-            throw TypeError("Invalid operand for " + op);
+            throw TypeError("Invalid operand for " + op, e->line_number, e->char_number);
     }
 
 public:
-    explicit TypeInferrer(Env& env): env_(env), printer_() {}
+    explicit TypeInferrer(Env& env): ValueGetter(), env_(env), printer_() {}
 
     void visitInt(Int *p) override { v = TypeNS::Type::INT; }
     void visitDoub(Doub *p) override { v = TypeNS::Type::DOUBLE; }
@@ -161,7 +164,7 @@ public:
     void visitELitDoub(ELitDoub *p) override { v = TypeNS::Type::DOUBLE; }
     void visitELitFalse(ELitFalse *p) override { v = TypeNS::Type::BOOLEAN; }
     void visitELitTrue(ELitTrue *p) override { v = TypeNS::Type::BOOLEAN; }
-    void visitEVar(EVar *p) override { v = env_.findVar(p->ident_); }
+    void visitEVar(EVar *p) override { v = env_.findVar(p->ident_, p->line_number, p->char_number); }
 
     void visitArgument(Argument *p) override { p->type_->accept(this); }
     void visitListArg(ListArg *p) override
@@ -179,39 +182,39 @@ public:
 
     void visitEAdd(EAdd *p) override
     {
-        BinaryExpression(p->expr_1, p->expr_2, "ADD",
-                         {TypeNS::Type::INT, TypeNS::Type::DOUBLE});
+        checkBinExp(p->expr_1, p->expr_2, "ADD",
+                    {TypeNS::Type::INT, TypeNS::Type::DOUBLE});
         v = TypeInferrer::getValue(p->expr_1, env_);
     }
 
     void visitEMul(EMul *p) override
     {
-        BinaryExpression(p->expr_1, p->expr_2, "MUL",
-                         {TypeNS::Type::INT, TypeNS::Type::DOUBLE});
+        checkBinExp(p->expr_1, p->expr_2, "MUL",
+                    {TypeNS::Type::INT, TypeNS::Type::DOUBLE});
         v = TypeInferrer::getValue(p->expr_1, env_);
     }
 
     void visitEOr(EOr *p) override
     {
-        BinaryExpression(p->expr_1, p->expr_2, "OR", {TypeNS::Type::BOOLEAN});
+        checkBinExp(p->expr_1, p->expr_2, "OR", {TypeNS::Type::BOOLEAN});
         v = TypeNS::Type::BOOLEAN;
     }
 
     void visitEAnd(EAnd *p) override
     {
-        BinaryExpression(p->expr_1, p->expr_2, "AND", {TypeNS::Type::BOOLEAN});
+        checkBinExp(p->expr_1, p->expr_2, "AND", {TypeNS::Type::BOOLEAN});
         v = TypeNS::Type::BOOLEAN;
     }
 
     void visitNot(Not *p) override
     {
-        UnaryExpression(p->expr_, "NOT", {TypeNS::Type::BOOLEAN});
+        checkUnExp(p->expr_, "NOT", {TypeNS::Type::BOOLEAN});
         v = TypeInferrer::getValue(p->expr_, env_);
     }
 
     void visitNeg(Neg *p) override
     {
-        UnaryExpression(p->expr_, "NEG", {TypeNS::Type::INT, TypeNS::Type::DOUBLE});
+        checkUnExp(p->expr_, "NEG", {TypeNS::Type::INT, TypeNS::Type::DOUBLE});
         v = TypeInferrer::getValue(p->expr_, env_);
     }
 
@@ -220,29 +223,31 @@ public:
         auto relop = RelOpVisitor::getValue(p->relop_);
         switch(relop) {
             case TypeNS::RelOp::EQU:
-                BinaryExpression(p->expr_1, p->expr_2, "EQU",
-                                 {TypeNS::Type::BOOLEAN, TypeNS::Type::INT, TypeNS::Type::DOUBLE}); break;
+                checkBinExp(p->expr_1, p->expr_2, "EQU",
+                            {TypeNS::Type::BOOLEAN, TypeNS::Type::INT, TypeNS::Type::DOUBLE}); break;
             case TypeNS::RelOp::NE:
-                BinaryExpression(p->expr_1, p->expr_2, "NE",
-                                 {TypeNS::Type::BOOLEAN, TypeNS::Type::INT, TypeNS::Type::DOUBLE}); break;
+                checkBinExp(p->expr_1, p->expr_2, "NE",
+                            {TypeNS::Type::BOOLEAN, TypeNS::Type::INT, TypeNS::Type::DOUBLE}); break;
             default:
-                BinaryExpression(p->expr_1, p->expr_2, "NE",
-                                 {TypeNS::Type::INT, TypeNS::Type::DOUBLE}); break;
+                checkBinExp(p->expr_1, p->expr_2, "NE",
+                            {TypeNS::Type::INT, TypeNS::Type::DOUBLE}); break;
         }
         v = TypeNS::Type::BOOLEAN;
     }
 
     void visitEApp(EApp *p) override
     {
-        FunctionType fnType = env_.findFn(p->ident_);
+        FunctionType fnType = env_.findFn(p->ident_, p->line_number, p->char_number);
         int listLength = p->listexpr_->size(); // Nr of args provided
-        int argLength  =  fnType.args.size(); // Actual nr of args
+        int argLength  =  fnType.args.size();  // Actual nr of args
 
         if(listLength != argLength) {
             throw TypeError("Function " + p->ident_ + " requires " + std::to_string(argLength) +
-                            " args, but " + std::to_string(listLength) + " was provided");
+                            " args, but " + std::to_string(listLength) +
+                            " was provided", p->line_number, p->char_number);
         }
 
+        // TODO: Write this in fewer lines
         auto itList = p->listexpr_->begin();
         auto itArg = fnType.args.begin();
         auto itListEnd = p->listexpr_->end();
@@ -250,8 +255,8 @@ public:
         for(;itList != itListEnd && itArg != itArgEnd; ++itList, ++itArg) {
             auto exprType = TypeInferrer::getValue(*itList, env_);
             if(exprType != *itArg) {
-                throw TypeError("In call to fn " + p->ident_ + ", expected arg " +
-                                TypeNS::toString(*itArg) + ", but got " + TypeNS::toString(exprType));
+                throw TypeError("In call to fn " + p->ident_ + ", expected arg " + TypeNS::toString(*itArg) +
+                                ", but got " + TypeNS::toString(exprType), p->line_number, p->char_number);
             }
         }
         v = fnType.returnType;
@@ -282,8 +287,8 @@ public:
         env_.addVar(p->ident_, t);
         auto exprType = TypeInferrer::getValue(p->expr_, env_);
         if(t != exprType) {
-            const std::string exprStr = printer_.print(p->expr_);
-            throw TypeError("Decl of type " + TypeNS::toString(t) + " does not match " + exprStr);
+            throw TypeError("expected type is " + TypeNS::toString(t) +
+                            ", but got " + TypeNS::toString(exprType), p->expr_->line_number, p->expr_->char_number);
         }
     }
 
@@ -301,7 +306,7 @@ class StatementChecker : public BaseVisitor {
     SignatureType currentFn_;
     int retCount_;
 public:
-    StatementChecker(Env& env): env_(env), printer_() {}
+    explicit StatementChecker(Env& env): env_(env), printer_(), retCount_(0) {}
 
     void visitBStmt(BStmt *p) override
     {
@@ -317,27 +322,29 @@ public:
 
     void visitDecr(Decr *p) override
     {
-        auto varType = env_.findVar(p->ident_);
+        auto varType = env_.findVar(p->ident_, p->line_number, p->char_number);
         if(varType != TypeNS::Type::INT) {
             throw TypeError("Cannot decrement " + p->ident_ + " of type " +
-                            TypeNS::toString(varType) + ", expected type int");
+                            TypeNS::toString(varType) + ", expected type int", p->line_number, p->char_number);
         }
     }
 
     void visitIncr(Incr *p) override
     {
-        auto varType = env_.findVar(p->ident_);
+        auto varType = env_.findVar(p->ident_, p->line_number, p->char_number);
         if(varType != TypeNS::Type::INT) {
             throw TypeError("Cannot increment " + p->ident_ + " of type " +
-                            TypeNS::toString(varType) + ", expected type int");
+                            TypeNS::toString(varType) + ", expected type int", p->line_number, p->char_number);
         }
     }
 
     void visitCond(Cond *p) override
     {
         auto exprType = TypeInferrer::getValue(p->expr_, env_);
-        if(exprType != TypeNS::Type::BOOLEAN)
-            throw TypeError("Expected boolean in cond, got " + toString(exprType));
+        if(exprType != TypeNS::Type::BOOLEAN) {
+            throw TypeError("Expected boolean in cond, got " +
+                            toString(exprType), p->line_number, p->char_number);
+        }
 
         p->stmt_->accept(this);
     }
@@ -345,8 +352,10 @@ public:
     void visitCondElse(CondElse *p) override
     {
         auto exprType = TypeInferrer::getValue(p->expr_, env_);
-        if(exprType != TypeNS::Type::BOOLEAN)
-            throw TypeError("Expected boolean in cond, got " + toString(exprType));
+        if(exprType != TypeNS::Type::BOOLEAN) {
+            throw TypeError("Expected boolean in cond, got " +
+                            toString(exprType), p->line_number, p->char_number);
+        }
 
         p->stmt_1->accept(this);
         p->stmt_2->accept(this);
@@ -355,8 +364,10 @@ public:
     void visitWhile(While *p) override
     {
         auto exprType = TypeInferrer::getValue(p->expr_, env_);
-        if(exprType != TypeNS::Type::BOOLEAN)
-            throw TypeError("Expected boolean in cond, got " + toString(exprType));
+        if(exprType != TypeNS::Type::BOOLEAN) {
+            throw TypeError("Expected boolean in cond, got " +
+                            toString(exprType), p->line_number, p->char_number);
+        }
 
         p->expr_->accept(this);
     }
@@ -391,17 +402,16 @@ public:
     {
         // TODO: Move to constructor if the responsibility of this visitor stays the same
         // Entrypoint for checking a sequence of statements
-        retCount_ = 0;
         currentFn_ = env_.getCurrentFunction();
         for(auto it : *p)
             it->accept(this);
         if(retCount_ < 1)
-            throw TypeError("Function needs at least one return statement");
+            throw TypeError("Function " + currentFn_.first + " needs at least one return statement");
     }
 
     void visitAss(Ass *p) override
     {
-        auto assType = env_.findVar(p->ident_);
+        auto assType = env_.findVar(p->ident_, p->line_number, p->char_number);
         auto exprType = TypeInferrer::getValue(p->expr_, env_);
 
         if (assType != exprType) {
@@ -419,7 +429,7 @@ public:
         if(exprType != currentFn_.second.returnType) { // TODO: Make variable names better
             throw TypeError("Expected return type for function " + currentFn_.first +
                             " is " + TypeNS::toString(currentFn_.second.returnType) +
-                            ", but got " + TypeNS::toString(exprType));
+                            ", but got " + TypeNS::toString(exprType), p->line_number, p->char_number);
         }
     }
 
@@ -429,7 +439,7 @@ public:
         if(TypeNS::Type::VOID != currentFn_.second.returnType) { // TODO: Make variable names better
             throw TypeError("Expected return type for function " + currentFn_.first +
                             " is " + TypeNS::toString(currentFn_.second.returnType) +
-                            ", but got " + TypeNS::toString(TypeNS::Type::VOID));
+                            ", but got " + TypeNS::toString(TypeNS::Type::VOID), p->line_number, p->char_number);
         }
     }
 
@@ -440,7 +450,7 @@ class FunctionChecker : public BaseVisitor {
     StatementChecker statementChecker;
     PrintAbsyn printer_; // TODO: Maybe have a common printer across classes
 public:
-    FunctionChecker(Env& env): env_(env), statementChecker(env), printer_() {}
+    explicit FunctionChecker(Env& env): env_(env), statementChecker(env), printer_() {}
 
     void visitFnDef(FnDef *p) override
     {

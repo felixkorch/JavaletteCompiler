@@ -2,10 +2,15 @@
 .idea
 bnfc
 gen
-jcl
+jlc
 build
 bin
+tester
 
 ## Mac specific
 
 .DS_Store
+
+## Windows specific
+
+premake5.exe

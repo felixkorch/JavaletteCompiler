@@ -1,7 +1,8 @@
 OBJ_DIR = build
 SRC_DIR = src
 GEN_DIR = bnfc
-BIN_DIR = bin
+BIN_DIR = .
+COMPILER_NAME = jlc
 
 MAIN_FILE = Main
 
@@ -37,19 +38,19 @@ BISON_OPTS=-t -pjavalette_
 
 .PHONY: all clean
 
-all: jcl
+all: $(COMPILER_NAME)
 
 debug: FLAGS += -DDEBUG -g
-debug: jcl
+debug: $(COMPILER_NAME)
 
 clean:
 	rm -rf $(GEN_DIR) build bin
 
-jcl: $(OBJ) $(MAIN_OBJ) | $(BIN_DIR)
+$(COMPILER_NAME): $(OBJ) $(MAIN_OBJ) | $(BIN_DIR)
 	$(CC) -o $(BIN_DIR)/$@ $^
 
 $(GEN_SRC)&:
-	$(BNFC_CMD)
+	$(BNFC_CMD) && cp -f src/Javalette.y bnfc/
 
 $(OBJ): | $(OBJ_DIR)
 

@@ -12,13 +12,13 @@ namespace typechecker {
 
         TypeError(const std::string &msg, int lineNr, int charNr) {
             std::stringstream ss;
-            ss << "error: " << lineNr << ":" << charNr << ": " << msg << std::endl;
+            ss << "ERROR\n" << lineNr << ":" << charNr << ": " << msg << std::endl;
             msg_ = ss.str();
         }
 
         explicit TypeError(const std::string &msg) {
             std::stringstream ss;
-            ss << "error: " << msg << std::endl;
+            ss << "ERROR\n" << msg << std::endl;
             msg_ = ss.str();
         }
 

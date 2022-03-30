@@ -9,6 +9,7 @@ std::string toString(TypeCode t) {
         case TypeCode::DOUBLE:   return "double";
         case TypeCode::BOOLEAN:  return "boolean";
         case TypeCode::VOID:     return "void";
+        case TypeCode::STRING:   return "string";
         default:                 return "errorType";
     }
 }
@@ -27,9 +28,22 @@ void ProgramChecker::visitProgram(Program *p) {
 }
 
 void ProgramChecker::visitListTopDef(ListTopDef *p) {
+
+    env_.addSignature("printInt", { {TypeCode::INT}, TypeCode::VOID });
+    env_.addSignature("printDouble", { {TypeCode::DOUBLE}, TypeCode::VOID });
+    env_.addSignature("printString", { {TypeCode::STRING}, TypeCode::VOID });
+    env_.addSignature("readInt", { {}, TypeCode::INT });
+    env_.addSignature("readDouble", { {}, TypeCode::DOUBLE });
+
+    // Aggregate the list of functions in signatures_
     for(auto a : *p)
         a->accept(this);
 
+    // Check that main exists
+    // TODO: Better solution of checking main
+    env_.findFn("main", -1, -1);
+
+    // Check all the functions one by one
     for(auto a : *p) {
         FunctionChecker fnChecker(env_);
         a->accept(&fnChecker);
@@ -158,7 +172,7 @@ void StatementChecker::visitListStmt(ListStmt *p)
     currentFn_ = env_.getCurrentFunction();
     for(auto it : *p)
         it->accept(this);
-    if(retCount_ < 1)
+    if(retCount_ < 1 && currentFn_.second.returnType != TypeCode::VOID)
         throw TypeError("Function " + currentFn_.first + " needs at least one return statement");
 }
 
@@ -194,6 +208,11 @@ void StatementChecker::visitVRet(VRet *p)
                         " is " + typechecker::toString(currentFn_.second.returnType) +
                         ", but got " + typechecker::toString(TypeCode::VOID), p->line_number, p->char_number);
     }
+}
+
+void StatementChecker::visitSExp(SExp *p)
+{
+    // TODO: Implement
 }
 
 /********************   DeclHandler class    ********************/
@@ -363,6 +382,7 @@ void TypeInferrer::visitEApp(EApp *p)
             throw TypeError("In call to fn " + p->ident_ + ", expected arg " + typechecker::toString(*itArg) +
                             ", but got " + typechecker::toString(exprType), p->line_number, p->char_number);
         }
+        std::cout << "arg: " << typechecker::toString(*itArg) << " expr: " << typechecker::toString(exprType) << std::endl;
     }
     v = fnType.returnType;
 }

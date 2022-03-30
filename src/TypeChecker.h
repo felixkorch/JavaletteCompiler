@@ -12,7 +12,7 @@ namespace typechecker {
 using namespace bnfc;
 
 enum class TypeCode {
-    INT, DOUBLE, BOOLEAN, VOID, ERROR
+    INT, DOUBLE, BOOLEAN, VOID, STRING, ERROR
 };
 
 enum class RelOpCode {
@@ -154,6 +154,7 @@ public:
     void visitAss(Ass *p) override;
     void visitRet(Ret *p) override;
     void visitVRet(VRet *p) override;
+    void visitSExp(SExp *p) override;
 
 };
 

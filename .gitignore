@@ -9,3 +9,7 @@ bin
 ## Mac specific
 
 .DS_Store
+
+## Windows specific
+
+premake5.exe

@@ -5,6 +5,19 @@ function preExecuteWindows()
     os.execute(".\\win_flex\\win_bison.exe -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C")
 end
 
+function preExecuteLinux()
+    os.execute("bnfc -m -l -p bnfc --cpp -o bnfc src/Javalette.cf && cp -f src/Javalette.y bnfc/")
+    os.execute("flex -Pjavalette_ -o bnfc/Lexer.C bnfc/Javalette.l")
+    os.execute("bison -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C")
+end
+
+local install_name = "partA-2.tar.gz"
+
+
+if _ACTION == "codelite" then
+    preExecuteLinux()
+end
+
 workspace "JavaletteCompiler"
     architecture "x86_64"
     startproject "jlc"
@@ -39,11 +52,6 @@ workspace "JavaletteCompiler"
         }
 
         removefiles { "src/Main.cpp", "bnfc/Test.C"}
-
-        filter "system:not windows"
-            prebuildcommands { "bnfc -m -l -p bnfc --cpp -o bnfc src/Javalette.cf && cp -f src/Javalette.y bnfc/"}
-            prebuildcommands { "flex -Pjavalette_ -o bnfc/Lexer.C bnfc/Javalette.l"}
-            prebuildcommands { "bison -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C" }
 
         includedirs {
             "%{wks.location}"
@@ -89,3 +97,29 @@ workspace "JavaletteCompiler"
         links {
             "jlc-lib"
         }
+        
+    newaction {
+	   trigger     = "install",
+	   description = "Install the software",
+	   execute = function ()
+	      os.execute("tar -czf " .. install_name .. " doc lib src Makefile")
+	   end
+	}
+
+
+    local function file_exists(name)
+        local f=io.open(name,"r")
+        if f~=nil then io.close(f) return true else return false end
+     end
+
+    newaction {
+        trigger     = "clean",
+        description = "Clean build artefacts",
+        execute = function ()
+            os.execute("rm -f *.project")
+            os.execute("rm -f *.workspace")
+            os.execute("rm -f " .. install_name)
+            os.execute("rm -rf bnfc > /dev/null")
+        end
+     }
+ 

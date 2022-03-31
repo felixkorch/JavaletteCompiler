@@ -3,7 +3,7 @@
 /* Parser definition to be used with Bison. */
 
 /* Generate header file for lexer. */
-%defines "Bison.H"
+%defines "bnfc/Bison.H"
 %name-prefix = "bnfc"
   /* From Bison 2.6: %define api.prefix {bnfc} */
 

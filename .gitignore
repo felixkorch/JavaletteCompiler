@@ -14,3 +14,6 @@ tester
 ## Windows specific
 
 premake5.exe
+.vs
+win_flex
+*.exe

@@ -6,6 +6,16 @@ jlc
 build
 bin
 tester
+bin-int
+*.mk
+*.project
+*.workspace
+*.gz
+.codelite
+.build-debug
+compile_flags.txt
+*.txt
+tags
 
 ## Mac specific
 

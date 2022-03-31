@@ -1,7 +1,7 @@
 #pragma once
 #include "bnfc/Absyn.H"
 #include "bnfc/Skeleton.H"
-#include "bnfc/Printer.h"
+#include "bnfc/Printer.H"
 #include "TypeError.h"
 #include <unordered_map>
 #include <algorithm>

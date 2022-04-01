@@ -16,6 +16,10 @@ bin-int
 compile_flags.txt
 *.txt
 tags
+*.make
+install/
+Makefile
+wip/
 
 ## Mac specific
 

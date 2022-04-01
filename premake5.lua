@@ -6,7 +6,7 @@ end
 
 local install_name = "partA-2.tar.gz" -- Update each iteration
 
-if _ACTION == "codelite" then
+if _ACTION == "codelite" or _ACTION == "gmake2" then
     preExecuteLinux()
 end
 
@@ -94,7 +94,7 @@ workspace "JavaletteCompiler"
 	   trigger     = "install",
 	   description = "Install the software",
 	   execute = function ()
-            os.execute("mkdir -p install && cp Makefile.bk install/Makefile && cp doc lib src install/")
+            os.execute("mkdir -p install && cp Makefile.bk install/Makefile && cp -rf doc lib src install/")
 	        os.execute("cd install && tar -czf " .. install_name .. " doc lib src Makefile")
 	   end
 	}
@@ -105,6 +105,8 @@ workspace "JavaletteCompiler"
         execute = function ()
             os.execute("rm -f *.project")
             os.execute("rm -f *.workspace")
+            os.execute("rm -f *.make")
+            os.execute("rm -f Makefile")
             os.execute("rm -f " .. install_name)
             os.execute("rm -rf bnfc > /dev/null")
         end

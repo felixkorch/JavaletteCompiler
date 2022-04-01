@@ -52,13 +52,13 @@ void ProgramChecker::visitListTopDef(ListTopDef *p) {
 
 void ProgramChecker::visitFnDef(FnDef *p)
 {
-    auto returnVal = TypeInferrer::getValue(p->type_, env_);
+    auto returnType = TypeInferrer::getValue(p->type_, env_);
     std::list<TypeCode> args;
 
     for(auto it : *p->listarg_)
         args.push_back(TypeInferrer::getValue(it, env_));
 
-    env_.addSignature(p->ident_, { args, returnVal });
+    env_.addSignature(p->ident_, {args, returnType });
 }
 
 /********************   FunctionChecker class    ********************/
@@ -210,10 +210,6 @@ void StatementChecker::visitVRet(VRet *p)
     }
 }
 
-void StatementChecker::visitSExp(SExp *p)
-{
-    // TODO: Implement
-}
 
 /********************   DeclHandler class    ********************/
 
@@ -382,7 +378,6 @@ void TypeInferrer::visitEApp(EApp *p)
             throw TypeError("In call to fn " + p->ident_ + ", expected arg " + typechecker::toString(*itArg) +
                             ", but got " + typechecker::toString(exprType), p->line_number, p->char_number);
         }
-        std::cout << "arg: " << typechecker::toString(*itArg) << " expr: " << typechecker::toString(exprType) << std::endl;
     }
     v = fnType.returnType;
 }

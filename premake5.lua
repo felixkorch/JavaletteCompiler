@@ -43,7 +43,7 @@ workspace "JavaletteCompiler"
             "bnfc/**.H"
         }
 
-        removefiles { "src/Main.cpp", "bnfc/Test.C"}
+        removefiles { "src/Main.cpp", "bnfc/Test.C", "bnfc/Skeleton.C" }
 
         includedirs {
             "%{wks.location}"
@@ -92,12 +92,20 @@ workspace "JavaletteCompiler"
         
     newaction {
 	   trigger     = "install",
-	   description = "Install the software",
+	   description = "Package the compiler source",
 	   execute = function ()
             os.execute("mkdir -p install && cp Makefile.bk install/Makefile && cp -rf doc lib src install/")
 	        os.execute("cd install && tar -czf " .. install_name .. " doc lib src Makefile")
 	   end
 	}
+
+    newaction {
+        trigger     = "test",
+        description = "Test the compiler",
+        execute = function ()
+             os.execute("cd tester && python3 testing.py ../install/" .. install_name)
+        end
+     }
 
     newaction {
         trigger     = "clean",

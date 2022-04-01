@@ -3,6 +3,7 @@
 #include "src/TypeChecker.h"
 #include "src/TypeError.h"
 
+
 int main(int argc, char ** argv)
 {
     FILE *input;

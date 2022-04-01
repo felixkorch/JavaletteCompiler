@@ -1,8 +1,8 @@
 #pragma once
 #include "bnfc/Absyn.H"
-#include "bnfc/Skeleton.H"
 #include "bnfc/Printer.H"
 #include "TypeError.h"
+#include "BaseVisitor.h"
 #include <unordered_map>
 #include <algorithm>
 #include <list>
@@ -51,7 +51,7 @@ public:
 };
 
 // Creates an alias that makes more sense.
-using BaseVisitor = Skeleton;
+//using BaseVisitor = Skeleton;
 
 // This class adds the ability to extend the Visitor interface by using templates, which makes it
 // possible to artificially return values.
@@ -154,7 +154,7 @@ public:
     void visitAss(Ass *p) override;
     void visitRet(Ret *p) override;
     void visitVRet(VRet *p) override;
-    void visitSExp(SExp *p) override;
+    //void visitSExp(SExp *p) override;
 
 };
 

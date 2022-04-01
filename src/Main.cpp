@@ -24,7 +24,7 @@ int main(int argc, char ** argv)
     try {
         parse_tree = bnfc::pProg(input);
     } catch( bnfc::parse_error &e) {
-        std::cerr << "ERROR: Parse error on line " << e.getLine() << "\n";
+        std::cerr << "ERROR: Parse error on line " << e.getLine() << std::endl;
     }
 
     if (parse_tree) {

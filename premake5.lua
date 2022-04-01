@@ -1,18 +1,10 @@
-function preExecuteWindows()
-    os.execute("bnfc-2.9.4.exe -m -l -p bnfc --cpp -o bnfc src/Javalette.cf")
-    os.execute("xcopy /y src\\Javalette.y bnfc")
-    os.execute(".\\win_flex\\win_flex.exe -Pjavalette_ -o bnfc/Lexer.C bnfc/Javalette.l")
-    os.execute(".\\win_flex\\win_bison.exe -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C")
-end
-
 function preExecuteLinux()
     os.execute("bnfc -m -l -p bnfc --cpp -o bnfc src/Javalette.cf && cp -f src/Javalette.y bnfc/")
     os.execute("flex -Pjavalette_ -o bnfc/Lexer.C bnfc/Javalette.l")
     os.execute("bison -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C")
 end
 
-local install_name = "partA-2.tar.gz"
-
+local install_name = "partA-2.tar.gz" -- Update each iteration
 
 if _ACTION == "codelite" then
     preExecuteLinux()
@@ -102,15 +94,10 @@ workspace "JavaletteCompiler"
 	   trigger     = "install",
 	   description = "Install the software",
 	   execute = function ()
-	      os.execute("tar -czf " .. install_name .. " doc lib src Makefile")
+            os.execute("mkdir -p install && cp Makefile.bk install/Makefile && cp doc lib src install/")
+	        os.execute("cd install && tar -czf " .. install_name .. " doc lib src Makefile")
 	   end
 	}
-
-
-    local function file_exists(name)
-        local f=io.open(name,"r")
-        if f~=nil then io.close(f) return true else return false end
-     end
 
     newaction {
         trigger     = "clean",

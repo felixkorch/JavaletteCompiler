@@ -3,17 +3,6 @@
 
 namespace typechecker {
 
-std::string toString(TypeCode t) {
-    switch (t) {
-        case TypeCode::INT:      return "int";
-        case TypeCode::DOUBLE:   return "double";
-        case TypeCode::BOOLEAN:  return "boolean";
-        case TypeCode::VOID:     return "void";
-        case TypeCode::STRING:   return "string";
-        default:                 return "errorType";
-    }
-}
-
 /********************   Entrypoint for typechecking   ********************/
 Prog* run(Prog* p) {
     Env env;
@@ -286,8 +275,10 @@ void TypeInferrer::checkBinExp(Expr* e1, Expr* e2, const std::string& op,
 
     if(!typeIn(expr1Type, allowedTypes) ||
        !typeIn(expr2Type, allowedTypes)) {
-        throw TypeError("Invalid operands for " + op);
+        throw TypeError("Invalid operands of types " + toString(expr1Type) +
+                        " and " + toString(expr2Type) + " to binary " + op);
     }
+
     if(expr1Type != expr2Type) {
         const std::string expr1Str = printer_.print(e1);
         const std::string expr2Str = printer_.print(e2);
@@ -301,8 +292,10 @@ void TypeInferrer::checkUnExp(Expr* e, const std::string& op,
 {
     auto expr1Type = TypeInferrer::getValue(e, env_);
 
-    if(!typeIn(expr1Type, allowedTypes))
-        throw TypeError("Invalid operand for " + op, e->line_number, e->char_number);
+    if(!typeIn(expr1Type, allowedTypes)) {
+        throw TypeError("Invalid operand of type " + toString(expr1Type) +
+                        " to unary " + op, e->line_number, e->char_number);
+    }
 }
 
 void TypeInferrer::visitEString(EString *p){ v = TypeCode::STRING; }
@@ -330,56 +323,72 @@ void TypeInferrer::visitListItem(ListItem *p)
         it->accept(this);
 }
 
+// Plus  (INT, DOUBLE)
+// Minus (INT, DOUBLE)
 void TypeInferrer::visitEAdd(EAdd *p)
 {
-    checkBinExp(p->expr_1, p->expr_2, "ADD",
+    auto addOpCode = OperatorVisitor::getValue(p->addop_);
+    checkBinExp(p->expr_1, p->expr_2, toString(addOpCode),
                 {TypeCode::INT, TypeCode::DOUBLE});
     v = TypeInferrer::getValue(p->expr_1, env_);
 }
 
+// Times, Div (INT, DOUBLE)
+// Mod        (INT)
 void TypeInferrer::visitEMul(EMul *p)
 {
-    checkBinExp(p->expr_1, p->expr_2, "MUL",
-                {TypeCode::INT, TypeCode::DOUBLE});
+    auto mulOpCode = OperatorVisitor::getValue(p->mulop_);
+    if(mulOpCode == OperatorCode::MOD)
+        checkBinExp(p->expr_1, p->expr_2, toString(mulOpCode),
+                    {TypeCode::INT});
+    else
+        checkBinExp(p->expr_1, p->expr_2, toString(mulOpCode), // Overloaded for INT & DOUBLE
+                    {TypeCode::INT, TypeCode::DOUBLE});
     v = TypeInferrer::getValue(p->expr_1, env_);
 }
 
+// OR (BOOLEAN)
 void TypeInferrer::visitEOr(EOr *p)
 {
-    checkBinExp(p->expr_1, p->expr_2, "OR", {TypeCode::BOOLEAN});
+    checkBinExp(p->expr_1, p->expr_2, toString(OperatorCode::OR), {TypeCode::BOOLEAN});
     v = TypeCode::BOOLEAN;
 }
 
+// AND (BOOLEAN)
 void TypeInferrer::visitEAnd(EAnd *p)
 {
-    checkBinExp(p->expr_1, p->expr_2, "AND", {TypeCode::BOOLEAN});
+    checkBinExp(p->expr_1, p->expr_2, toString(OperatorCode::AND), {TypeCode::BOOLEAN});
     v = TypeCode::BOOLEAN;
 }
 
+// NOT (BOOLEAN)
 void TypeInferrer::visitNot(Not *p)
 {
-    checkUnExp(p->expr_, "NOT", {TypeCode::BOOLEAN});
+    checkUnExp(p->expr_, toString(OperatorCode::NOT), {TypeCode::BOOLEAN});
     v = TypeInferrer::getValue(p->expr_, env_);
 }
 
+// NEG (INT, DOUBLE)
 void TypeInferrer::visitNeg(Neg *p)
 {
-    checkUnExp(p->expr_, "NEG", {TypeCode::INT, TypeCode::DOUBLE});
+    checkUnExp(p->expr_, toString(OperatorCode::NEG), {TypeCode::INT, TypeCode::DOUBLE});
     v = TypeInferrer::getValue(p->expr_, env_);
 }
 
+// LTH, LE, GTH, GE (INT, DOUBLE)
+// EQU, NE          (INT, DOUBLE, BOOLEAN)
 void TypeInferrer::visitERel(ERel *p)
 {
-    auto relop = RelOpVisitor::getValue(p->relop_);
-    switch(relop) {
-        case RelOpCode::EQU:
-            checkBinExp(p->expr_1, p->expr_2, "EQU",
+    auto opc = OperatorVisitor::getValue(p->relop_);
+    switch(opc) {
+        case OperatorCode::EQU:
+            checkBinExp(p->expr_1, p->expr_2, toString(opc),
                         {TypeCode::BOOLEAN, TypeCode::INT, TypeCode::DOUBLE}); break;
-        case RelOpCode::NE:
-            checkBinExp(p->expr_1, p->expr_2, "NE",
+        case OperatorCode::NE:
+            checkBinExp(p->expr_1, p->expr_2, toString(opc),
                         {TypeCode::BOOLEAN, TypeCode::INT, TypeCode::DOUBLE}); break;
         default:
-            checkBinExp(p->expr_1, p->expr_2, "NE",
+            checkBinExp(p->expr_1, p->expr_2, toString(opc),
                         {TypeCode::INT, TypeCode::DOUBLE}); break;
     }
     v = TypeCode::BOOLEAN;
@@ -457,4 +466,41 @@ void Env::addVar(const std::string& name, TypeCode t)
     if(!ok)
         throw TypeError("Duplicate variable '" + name + "' in scope");
 }
+
+/********************   Other functions    ********************/
+
+// Could be visitors
+std::string toString(TypeCode t) {
+    switch (t) {
+        case TypeCode::INT:      return "int";
+        case TypeCode::DOUBLE:   return "double";
+        case TypeCode::BOOLEAN:  return "boolean";
+        case TypeCode::VOID:     return "void";
+        case TypeCode::STRING:   return "string";
+        default:                 return "errorType";
+    }
+}
+
+std::string toString(OperatorCode c) {
+    switch (c) {
+        case OperatorCode::LTH:     return "operator <";
+        case OperatorCode::LE:      return "operator <=";
+        case OperatorCode::GTH:     return "operator >";
+        case OperatorCode::GE:      return "operator >=";
+        case OperatorCode::EQU:     return "operator ==";
+        case OperatorCode::NE:      return "operator !=";
+        case OperatorCode::PLUS:    return "operator +";
+        case OperatorCode::MINUS:   return "operator -";
+        case OperatorCode::TIMES:   return "operator *";
+        case OperatorCode::DIV:     return "operator /";
+        case OperatorCode::MOD:     return "operator %";
+        case OperatorCode::AND:     return "operator &&";
+        case OperatorCode::OR:      return "operator ||";
+        case OperatorCode::NOT:     return "operator !";
+        case OperatorCode::NEG:     return "operator ~";
+        default:                    return "errorCode";
+    }
+}
+
+
 }

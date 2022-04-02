@@ -15,9 +15,15 @@ enum class TypeCode {
     INT, DOUBLE, BOOLEAN, VOID, STRING, ERROR
 };
 
-enum class RelOpCode {
-    LTH , LE, GTH, GE, EQU, NE
+enum class OperatorCode {
+    LTH , LE, GTH, GE, EQU, NE, // RelOP
+    PLUS, MINUS,                // AddOP
+    TIMES, DIV, MOD,            // MulOP
+    AND, OR, NOT, NEG           // Other
 };
+
+std::string toString(TypeCode t);
+std::string toString(OperatorCode c);
 
 struct FunctionType {
     std::list<TypeCode> args;
@@ -50,43 +56,23 @@ public:
     void addVar(const std::string& name, TypeCode t);
 };
 
-// Creates an alias that makes more sense.
-//using BaseVisitor = Skeleton;
-
-// This class adds the ability to extend the Visitor interface by using templates, which makes it
-// possible to artificially return values.
-template <class ValueType, class VisitableType, class VisitorImpl>
-class ValueGetter {
-protected:
-    ValueType v;
+class OperatorVisitor : public BaseVisitor, public ValueGetter<OperatorCode, OperatorVisitor, Env> {
 public:
-    // Dispatches a new VisitorImpl and visits, it then puts the result in "v" which is available in VisitorImpl.
-    static ValueType getValue(VisitableType* p, Env& env)
-    {
-        VisitorImpl visitor(env);
-        p->accept(&visitor);
-        return visitor.v;
-    }
-
-    static ValueType getValue(VisitableType* p)
-    {
-        VisitorImpl visitor;
-        p->accept(&visitor);
-        return visitor.v;
-    }
+    void visitLE  (LE  *p) override { v = OperatorCode::LE;  }
+    void visitLTH (LTH *p) override { v = OperatorCode::LTH; }
+    void visitGE  (GE  *p) override { v = OperatorCode::GE;  }
+    void visitEQU (EQU *p) override { v = OperatorCode::EQU; }
+    void visitNE  (NE  *p) override { v = OperatorCode::NE;  }
+    void visitGTH (GTH *p) override { v = OperatorCode::GTH; }
+    void visitPlus (Plus *p) override { v = OperatorCode::PLUS; }
+    void visitMinus (Minus *p) override { v = OperatorCode::MINUS; }
+    void visitTimes (Times *p) override { v = OperatorCode::TIMES; }
+    void visitDiv (Div *p) override { v = OperatorCode::DIV; }
+    void visitMod (Mod *p) override { v = OperatorCode::MOD; }
 };
 
-class RelOpVisitor : public BaseVisitor, public ValueGetter<RelOpCode, Visitable, RelOpVisitor> {
-public:
-    void visitLE  (LE  *p) override { v = RelOpCode::LE;  }
-    void visitLTH (LTH *p) override { v = RelOpCode::LTH; }
-    void visitGE  (GE  *p) override { v = RelOpCode::GE;  }
-    void visitEQU (EQU *p) override { v = RelOpCode::EQU; }
-    void visitNE  (NE  *p) override { v = RelOpCode::NE;  }
-    void visitGTH (GTH *p) override { v = RelOpCode::GTH; }
-};
-
-class TypeInferrer : public BaseVisitor, public ValueGetter<TypeCode, Visitable, TypeInferrer> {
+// Returns the TypeCode of the expression and checks the compatability between operands and supported types for operators.
+class TypeInferrer : public BaseVisitor, public ValueGetter<TypeCode, TypeInferrer, Env> {
     Env& env_;
     PrintAbsyn printer_;
 
@@ -123,7 +109,7 @@ public:
 class DeclHandler : public BaseVisitor {
     Env& env_;
     PrintAbsyn printer_;
-    TypeCode t;
+    TypeCode t; // Type of declaration of variable
 public:
     explicit DeclHandler(Env& env): env_(env), printer_(), t(TypeCode::ERROR) {}
 
@@ -159,7 +145,8 @@ public:
 
 };
 
-class ReturnChecker : public BaseVisitor, public ValueGetter<bool, Visitable, ReturnChecker> {
+// Checks that the function returns a value (for non-void)
+class ReturnChecker : public BaseVisitor, public ValueGetter<bool, ReturnChecker, Env> {
     Env& env_;
     PrintAbsyn printer_;
 public:

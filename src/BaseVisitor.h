@@ -4,8 +4,31 @@
 namespace typechecker
 {
     using namespace bnfc;
-    class BaseVisitor : public Visitor
-    {
+
+    // This class adds the ability to extend the Visitor interface by using templates, which makes it
+    // possible to artificially return values.
+    template <class ValueType, class VisitorImpl, class Context>
+    class ValueGetter {
+    protected:
+        ValueType v;
+    public:
+        // Dispatches a new VisitorImpl and visits, it then puts the result in "v" which is available in VisitorImpl.
+        static ValueType getValue(Visitable* p, Context& env)
+        {
+            VisitorImpl visitor(env);
+            p->accept(&visitor);
+            return visitor.v;
+        }
+
+        static ValueType getValue(Visitable* p)
+        {
+            VisitorImpl visitor;
+            p->accept(&visitor);
+            return visitor.v;
+        }
+    };
+
+    class BaseVisitor : public Visitor {
     public:
         void visitProg(Prog *p);
         void visitTopDef(TopDef *p);

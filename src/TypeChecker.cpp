@@ -29,7 +29,7 @@ void ProgramChecker::visitListTopDef(ListTopDef *p) {
         it->accept(this);
 
     // Check that main exists
-    env_.findFn("main", -1, -1);
+    env_.findFn("main", 1, 1);
 
     // Check all the functions one by one
     for(auto it : *p) {
@@ -199,10 +199,9 @@ void StatementChecker::visitVRet(VRet *p)
 
 void StatementChecker::visitSExp(SExp *p)
 {
-    // e.g. 5 + 3; or printString("hello");
-    // Just check that the expr type can be inferred.
+    // e.g. printString("hello");
     if(TypeInferrer::getValue(p->expr_, env_) != TypeCode::VOID)
-        throw TypeError("Expression should be of type void");
+        throw TypeError("Expression should be of type void", p->line_number, p->char_number);
 }
 
 void StatementChecker::visitEmpty(Empty *p)
@@ -212,6 +211,12 @@ void StatementChecker::visitEmpty(Empty *p)
 }
 
 /********************   ReturnChecker class    ********************/
+// Returns true if:
+// 1. Current level returns a value.
+// 2. There is an if-else and both branches return a value.
+//
+// Notes: * if-statement ignored because it's not enough if it returns, so it becomes irrelevant
+//        * the control-flow will always pass through either if/else so if both returns, then it's OK.
 
 void ReturnChecker::visitBStmt(BStmt *p){ p->blk_->accept(this); }
 void ReturnChecker::visitDecr(Decr *p) {}
@@ -427,7 +432,7 @@ void Env::enterScope() { scopes_.push_front(ScopeType()); }
 void Env::exitScope() { scopes_.pop_front(); }
 void Env::enterFn(const std::string& fnName)
 {
-    currentFn_ = { fnName, findFn(fnName, -1, -1) };
+    currentFn_ = { fnName, findFn(fnName, 1, 1) };
 }
 SignatureType& Env::getCurrentFunction() { return currentFn_; }
 

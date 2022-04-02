@@ -117,6 +117,7 @@ public:
     void visitNeg(Neg *p) override;
     void visitERel(ERel *p) override;
     void visitEApp(EApp *p) override;
+    void visitEString(EString *p) override;
 };
 
 class DeclHandler : public BaseVisitor {
@@ -133,14 +134,13 @@ public:
 
 };
 
-// For now it checks a sequence of statements for the same visitor-object
+// Checks a sequence of statements for the same visitor-object
 class StatementChecker : public BaseVisitor {
     Env& env_;
     PrintAbsyn printer_;
     SignatureType currentFn_;
-    int retCount_;
 public:
-    explicit StatementChecker(Env& env): env_(env), printer_(), retCount_(0) {}
+    explicit StatementChecker(Env& env): env_(env), printer_() {}
 
     void visitBStmt(BStmt *p) override;
     void visitDecr(Decr *p) override;
@@ -154,7 +154,31 @@ public:
     void visitAss(Ass *p) override;
     void visitRet(Ret *p) override;
     void visitVRet(VRet *p) override;
-    //void visitSExp(SExp *p) override;
+    void visitSExp(SExp *p) override;
+    void visitEmpty(Empty *p) override;
+
+};
+
+class ReturnChecker : public BaseVisitor, public ValueGetter<bool, Visitable, ReturnChecker> {
+    Env& env_;
+    PrintAbsyn printer_;
+public:
+    explicit ReturnChecker(Env& env): env_(env), printer_() { v = false; }
+
+    void visitBStmt(BStmt *p) override;
+    void visitDecr(Decr *p) override;
+    void visitIncr(Incr *p) override;
+    void visitCond(Cond *p) override;
+    void visitCondElse(CondElse *p) override;
+    void visitWhile(While *p) override;
+    void visitBlock(Block *p) override;
+    void visitDecl(Decl *p) override;
+    void visitListStmt(ListStmt *p) override;
+    void visitAss(Ass *p) override;
+    void visitRet(Ret *p) override;
+    void visitVRet(VRet *p) override;
+    void visitSExp(SExp *p) override;
+    void visitEmpty(Empty *p) override;
 
 };
 

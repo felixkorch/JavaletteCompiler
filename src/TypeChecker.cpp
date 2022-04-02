@@ -28,25 +28,24 @@ void ProgramChecker::visitProgram(Program *p) {
 }
 
 void ProgramChecker::visitListTopDef(ListTopDef *p) {
-
+    // Add the predefined functions
     env_.addSignature("printInt", { {TypeCode::INT}, TypeCode::VOID });
     env_.addSignature("printDouble", { {TypeCode::DOUBLE}, TypeCode::VOID });
     env_.addSignature("printString", { {TypeCode::STRING}, TypeCode::VOID });
     env_.addSignature("readInt", { {}, TypeCode::INT });
     env_.addSignature("readDouble", { {}, TypeCode::DOUBLE });
 
-    // Aggregate the list of functions in signatures_
-    for(auto a : *p)
-        a->accept(this);
+    // First pass to aggregate the list of functions in signatures_
+    for(auto it : *p)
+        it->accept(this);
 
     // Check that main exists
-    // TODO: Better solution of checking main
     env_.findFn("main", -1, -1);
 
     // Check all the functions one by one
-    for(auto a : *p) {
+    for(auto it : *p) {
         FunctionChecker fnChecker(env_);
-        a->accept(&fnChecker);
+        it->accept(&fnChecker);
     }
 }
 
@@ -66,7 +65,7 @@ void ProgramChecker::visitFnDef(FnDef *p)
 
 void FunctionChecker::visitFnDef(FnDef *p)
 {
-    env_.enterFn(p->ident_);
+    env_.enterFn(p->ident_); // So that StatementChecker will be aware of the fn.
     env_.enterScope();
     p->listarg_->accept(this);
     p->blk_->accept(this);
@@ -82,11 +81,12 @@ void FunctionChecker::visitBlock(Block *p)
 void FunctionChecker::visitListArg(ListArg *p)
 {
     for(auto it : *p)
-    it->accept(this);
+        it->accept(this);
 }
 
 void FunctionChecker::visitArgument(Argument *p)
 {
+    // Each argument gets added to the env before StatementChecker takes over.
     auto argType = TypeInferrer::getValue(p->type_, env_);
     env_.addVar(p->ident_, argType);
 }
@@ -150,7 +150,7 @@ void StatementChecker::visitWhile(While *p)
                         toString(exprType), p->line_number, p->char_number);
     }
 
-    p->expr_->accept(this);
+    p->stmt_->accept(this);
 }
 
 void StatementChecker::visitBlock(Block *p)
@@ -172,8 +172,8 @@ void StatementChecker::visitListStmt(ListStmt *p)
     currentFn_ = env_.getCurrentFunction();
     for(auto it : *p)
         it->accept(this);
-    if(retCount_ < 1 && currentFn_.second.returnType != TypeCode::VOID)
-        throw TypeError("Function " + currentFn_.first + " needs at least one return statement");
+    if(!ReturnChecker::getValue(p, env_) && currentFn_.second.returnType != TypeCode::VOID)
+        throw TypeError("Non-void function " + currentFn_.first + " has to return a value"); // TODO: Make variable names better
 }
 
 void StatementChecker::visitAss(Ass *p)
@@ -191,7 +191,6 @@ void StatementChecker::visitAss(Ass *p)
 
 void StatementChecker::visitRet(Ret *p)
 {
-    ++retCount_;
     auto exprType = TypeInferrer::getValue(p->expr_, env_);
     if(exprType != currentFn_.second.returnType) { // TODO: Make variable names better
         throw TypeError("Expected return type for function " + currentFn_.first +
@@ -202,13 +201,43 @@ void StatementChecker::visitRet(Ret *p)
 
 void StatementChecker::visitVRet(VRet *p)
 {
-    ++retCount_;
     if(TypeCode::VOID != currentFn_.second.returnType) { // TODO: Make variable names better
         throw TypeError("Expected return type for function " + currentFn_.first +
                         " is " + typechecker::toString(currentFn_.second.returnType) +
                         ", but got " + typechecker::toString(TypeCode::VOID), p->line_number, p->char_number);
     }
 }
+
+void StatementChecker::visitSExp(SExp *p)
+{
+    // e.g. 5 + 3; or printString("hello");
+    // Just check that the expr type can be inferred.
+    if(TypeInferrer::getValue(p->expr_, env_) != TypeCode::VOID)
+        throw TypeError("Expression should be of type void");
+}
+
+void StatementChecker::visitEmpty(Empty *p)
+{
+    // Called e.g, when cond has no statement (i.e empty):
+    // if (false);
+}
+
+/********************   ReturnChecker class    ********************/
+
+void ReturnChecker::visitBStmt(BStmt *p){ p->blk_->accept(this); }
+void ReturnChecker::visitDecr(Decr *p) {}
+void ReturnChecker::visitIncr(Incr *p) {}
+void ReturnChecker::visitCond(Cond *p) {}
+void ReturnChecker::visitCondElse(CondElse *p) { if(ReturnChecker::getValue(p->stmt_1, env_) && ReturnChecker::getValue(p->stmt_2, env_)) v = true; }
+void ReturnChecker::visitWhile(While *p) {}
+void ReturnChecker::visitBlock(Block *p) { for(auto it : *p->liststmt_) it->accept(this); }
+void ReturnChecker::visitDecl(Decl *p) {}
+void ReturnChecker::visitListStmt(ListStmt *p) { for(auto it : *p) it->accept(this); }
+void ReturnChecker::visitAss(Ass *p) {}
+void ReturnChecker::visitRet(Ret *p) { v = true; }
+void ReturnChecker::visitVRet(VRet *p) {}
+void ReturnChecker::visitSExp(SExp *p) {}
+void ReturnChecker::visitEmpty(Empty *p) {}
 
 
 /********************   DeclHandler class    ********************/
@@ -276,6 +305,7 @@ void TypeInferrer::checkUnExp(Expr* e, const std::string& op,
         throw TypeError("Invalid operand for " + op, e->line_number, e->char_number);
 }
 
+void TypeInferrer::visitEString(EString *p){ v = TypeCode::STRING; }
 void TypeInferrer::visitInt(Int *p) { v = TypeCode::INT; }
 void TypeInferrer::visitDoub(Doub *p) { v = TypeCode::DOUBLE; }
 void TypeInferrer::visitBool(Bool *p) { v = TypeCode::BOOLEAN; }

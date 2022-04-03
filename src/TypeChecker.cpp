@@ -95,7 +95,7 @@ void StatementChecker::visitDecr(Decr *p)
     auto varType = env_.findVar(p->ident_, p->line_number, p->char_number);
     if(varType != TypeCode::INT) {
         throw TypeError("Cannot decrement " + p->ident_ + " of type " +
-                        typechecker::toString(varType) + ", expected type int", p->line_number, p->char_number);
+                        toString(varType) + ", expected type int", p->line_number, p->char_number);
     }
 }
 
@@ -104,7 +104,7 @@ void StatementChecker::visitIncr(Incr *p)
     auto varType = env_.findVar(p->ident_, p->line_number, p->char_number);
     if(varType != TypeCode::INT) {
         throw TypeError("Cannot increment " + p->ident_ + " of type " +
-                        typechecker::toString(varType) + ", expected type int", p->line_number, p->char_number);
+                        toString(varType) + ", expected type int", p->line_number, p->char_number);
     }
 }
 
@@ -171,9 +171,8 @@ void StatementChecker::visitAss(Ass *p)
     auto exprType = TypeInferrer::getValue(p->expr_, env_);
 
     if (assType != exprType) {
-        const std::string v = printer_.print(p->expr_);
-        throw TypeError(v + " has type " + typechecker::toString(exprType)
-                        + ", expected " + typechecker::toString(assType)
+        throw TypeError(env_.Print(p->expr_) + " has type " + toString(exprType)
+                        + ", expected " + toString(assType)
                         + " for variable " + p->ident_);
     }
 }
@@ -183,8 +182,8 @@ void StatementChecker::visitRet(Ret *p)
     auto exprType = TypeInferrer::getValue(p->expr_, env_);
     if(exprType != currentFn_.second.returnType) { // TODO: Make variable names better
         throw TypeError("Expected return type for function " + currentFn_.first +
-                        " is " + typechecker::toString(currentFn_.second.returnType) +
-                        ", but got " + typechecker::toString(exprType), p->line_number, p->char_number);
+                        " is " + toString(currentFn_.second.returnType) +
+                        ", but got " + toString(exprType), p->line_number, p->char_number);
     }
 }
 
@@ -192,8 +191,8 @@ void StatementChecker::visitVRet(VRet *p)
 {
     if(TypeCode::VOID != currentFn_.second.returnType) { // TODO: Make variable names better
         throw TypeError("Expected return type for function " + currentFn_.first +
-                        " is " + typechecker::toString(currentFn_.second.returnType) +
-                        ", but got " + typechecker::toString(TypeCode::VOID), p->line_number, p->char_number);
+                        " is " + toString(currentFn_.second.returnType) +
+                        ", but got " + toString(TypeCode::VOID), p->line_number, p->char_number);
     }
 }
 
@@ -253,8 +252,8 @@ void DeclHandler::visitInit(Init *p)
     env_.addVar(p->ident_, t);
     auto exprType = TypeInferrer::getValue(p->expr_, env_);
     if(t != exprType) {
-        throw TypeError("expected type is " + typechecker::toString(t) +
-                        ", but got " + typechecker::toString(exprType), p->expr_->line_number, p->expr_->char_number);
+        throw TypeError("expected type is " + toString(t) +
+                        ", but got " + toString(exprType), p->expr_->line_number, p->expr_->char_number);
     }
 }
 
@@ -285,10 +284,8 @@ void TypeInferrer::checkBinExp(Expr* e1, Expr* e2, const std::string& op,
     }
 
     if(expr1Type != expr2Type) {
-        const std::string expr1Str = printer_.print(e1);
-        const std::string expr2Str = printer_.print(e2);
-        throw TypeError("Incompatible types " + expr1Str
-                        + ", " + expr2Str, e1->line_number, e1->char_number);
+        throw TypeError("Incompatible operands of types " + toString(expr1Type) +
+                        " and " + toString(expr2Type) + " to binary " + op, e1->line_number, e1->char_number);
     }
 }
 
@@ -419,8 +416,8 @@ void TypeInferrer::visitEApp(EApp *p)
     for(;itList != itListEnd && itArg != itArgEnd; ++itList, ++itArg) {
         auto exprType = TypeInferrer::getValue(*itList, env_);
         if(exprType != *itArg) {
-            throw TypeError("In call to fn " + p->ident_ + ", expected arg " + typechecker::toString(*itArg) +
-                            ", but got " + typechecker::toString(exprType), p->line_number, p->char_number);
+            throw TypeError("In call to fn " + p->ident_ + ", expected arg " + toString(*itArg) +
+                            ", but got " + toString(exprType), p->line_number, p->char_number);
         }
     }
     v = fnType.returnType;
@@ -475,7 +472,7 @@ void Env::addVar(const std::string& name, TypeCode t)
 /********************   Other functions    ********************/
 
 // Could be visitors
-std::string toString(TypeCode t) {
+const std::string toString(TypeCode t) {
     switch (t) {
         case TypeCode::INT:      return "int";
         case TypeCode::DOUBLE:   return "double";
@@ -486,7 +483,7 @@ std::string toString(TypeCode t) {
     }
 }
 
-std::string toString(OperatorCode c) {
+const std::string toString(OperatorCode c) {
     switch (c) {
         case OperatorCode::LTH:     return "operator <";
         case OperatorCode::LE:      return "operator <=";

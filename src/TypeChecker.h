@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <list>
+#include <memory>
 
 namespace typechecker {
 
@@ -22,8 +23,8 @@ enum class OperatorCode {
     AND, OR, NOT, NEG           // Other
 };
 
-std::string toString(TypeCode t);
-std::string toString(OperatorCode c);
+const std::string toString(TypeCode t);
+const std::string toString(OperatorCode c);
 
 struct FunctionType {
     std::list<TypeCode> args;
@@ -34,11 +35,20 @@ using ScopeType = std::unordered_map<std::string, TypeCode>; // Map of (Var -> T
 using SignatureType = std::pair<std::string, FunctionType>;  // Pair   (name, FunctionType)
 
 class Env {
+    // Defines the environment of the program
     std::list<ScopeType> scopes_;
     std::unordered_map<std::string, FunctionType> signatures_;
     SignatureType currentFn_;
 
+    /* Not related to the semantics of the type-checker, just for passing around a printing object. */
+    std::unique_ptr<PrintAbsyn> printer_;
 public:
+    Env()
+    : scopes_()
+    , signatures_()
+    , currentFn_()
+    , printer_(new PrintAbsyn()) {}
+
     void enterScope();
     void exitScope();
     void enterFn(const std::string& fnName);
@@ -46,14 +56,19 @@ public:
 
     // In the future: could enter scope in constructor to allow global vars
 
+    // Called in the first pass of the type-checker
     void addSignature(const std::string& fnName, const FunctionType& t);
 
-    // Called when it's used in an expression, if it doesn't exist, throw
+    // Called when it's used in an expression, throws if the variable doesn't exist.
     TypeCode findVar(const std::string& var, int lineNr, int charNr);
-
+    // Called when a function call is invoked, throws if the function doesn't exist.
     FunctionType& findFn(const std::string& fn, int lineNr, int charNr);
-
+    // Adds a variable to the current scope, throws if it already exists.
     void addVar(const std::string& name, TypeCode t);
+
+    /* Not related to the semantics of the type-checker, just for printing */
+    inline const std::string Print(Visitable* v) { return printer_->print(v); }
+
 };
 
 class OperatorVisitor : public BaseVisitor, public ValueGetter<OperatorCode, OperatorVisitor, Env> {
@@ -74,14 +89,13 @@ public:
 // Returns the TypeCode of the expression and checks the compatability between operands and supported types for operators.
 class TypeInferrer : public BaseVisitor, public ValueGetter<TypeCode, TypeInferrer, Env> {
     Env& env_;
-    PrintAbsyn printer_;
 
     static bool typeIn(TypeCode t, std::initializer_list<TypeCode> list);
     void checkBinExp(Expr* e1, Expr* e2, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
     void checkUnExp(Expr* e, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
 
 public:
-    explicit TypeInferrer(Env& env): ValueGetter(), env_(env), printer_() {}
+    explicit TypeInferrer(Env& env): ValueGetter(), env_(env) {}
 
     void visitInt(Int *p) override;
     void visitDoub(Doub *p) override;
@@ -108,10 +122,9 @@ public:
 
 class DeclHandler : public BaseVisitor {
     Env& env_;
-    PrintAbsyn printer_;
     TypeCode t; // Type of declaration of variable
 public:
-    explicit DeclHandler(Env& env): env_(env), printer_(), t(TypeCode::ERROR) {}
+    explicit DeclHandler(Env& env): env_(env), t(TypeCode::ERROR) {}
 
     void visitDecl(Decl *p) override;
     void visitListItem(ListItem *p) override;
@@ -123,10 +136,9 @@ public:
 // Checks a sequence of statements for the same visitor-object
 class StatementChecker : public BaseVisitor {
     Env& env_;
-    PrintAbsyn printer_;
     SignatureType currentFn_;
 public:
-    explicit StatementChecker(Env& env): env_(env), printer_() {}
+    explicit StatementChecker(Env& env): env_(env) {}
 
     void visitBStmt(BStmt *p) override;
     void visitDecr(Decr *p) override;
@@ -148,9 +160,8 @@ public:
 // Checks that the function returns a value (for non-void)
 class ReturnChecker : public BaseVisitor, public ValueGetter<bool, ReturnChecker, Env> {
     Env& env_;
-    PrintAbsyn printer_;
 public:
-    explicit ReturnChecker(Env& env): env_(env), printer_() { v = false; }
+    explicit ReturnChecker(Env& env): env_(env) { v = false; }
 
     void visitBStmt(BStmt *p) override;
     void visitDecr(Decr *p) override;
@@ -172,12 +183,10 @@ public:
 class FunctionChecker : public BaseVisitor {
     Env& env_;
     StatementChecker statementChecker;
-    PrintAbsyn printer_; // TODO: Maybe have a common printer across classes
 public:
     explicit FunctionChecker(Env& env)
     : env_(env)
-    , statementChecker(env)
-    , printer_() {}
+    , statementChecker(env) {}
 
     void visitFnDef(FnDef *p) override;
     void visitBlock(Block *p) override;

@@ -25,6 +25,7 @@ enum class OperatorCode {
 
 const std::string toString(TypeCode t);
 const std::string toString(OperatorCode c);
+Type* TypeConstructor(TypeCode t);
 
 struct FunctionType {
     std::list<TypeCode> args;
@@ -86,21 +87,28 @@ public:
     void visitMod (Mod *p) override { v = OperatorCode::MOD; }
 };
 
-// Returns the TypeCode of the expression and checks the compatability between operands and supported types for operators.
-class TypeInferrer : public BaseVisitor, public ValueGetter<TypeCode, TypeInferrer, Env> {
+//  Returns the typecode for a Type
+class TypeCoder : public BaseVisitor, public ValueGetter<TypeCode, TypeCoder, Env> {
+public:
+    void visitInt(Int *p)   override { v = TypeCode::INT; }
+    void visitDoub(Doub *p) override { v = TypeCode::DOUBLE; }
+    void visitBool(Bool *p) override { v = TypeCode::BOOLEAN; }
+    void visitVoid(Void *p) override { v = TypeCode::VOID; }
+    void visitStringLit(StringLit *p) override { v = TypeCode::STRING; }
+    void visitArgument(Argument *p) override { p->type_->accept(this); }
+};
+
+// Returns an annotated version of the expression and checks the compatability between operands and supported types for operators.
+class TypeInferrer : public BaseVisitor, public ValueGetter<ETyped*, TypeInferrer, Env> {
     Env& env_;
 
     static bool typeIn(TypeCode t, std::initializer_list<TypeCode> list);
-    void checkBinExp(Expr* e1, Expr* e2, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
-    void checkUnExp(Expr* e, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
+    Type* checkBinExp(Expr* e1, Expr* e2, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
+    Type* checkUnExp(Expr* e, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
 
 public:
     explicit TypeInferrer(Env& env): ValueGetter(), env_(env) {}
 
-    void visitInt(Int *p) override;
-    void visitDoub(Doub *p) override;
-    void visitBool(Bool *p) override;
-    void visitVoid(Void *p) override;
     void visitELitInt(ELitInt *p) override;
     void visitELitDoub(ELitDoub *p) override;
     void visitELitFalse(ELitFalse *p) override;

@@ -95,6 +95,8 @@ namespace typechecker
         void visitListItem(ListItem *p);
         void visitListType(ListType *p);
         void visitListExpr(ListExpr *p);
+        void visitETyped(ETyped *p);
+        void visitStringLit(StringLit *p);
 
         void visitInteger(Integer x);
         void visitChar(Char x);

@@ -31,6 +31,16 @@ void BaseVisitor::visitAddOp(AddOp *t) {} //abstract class
 void BaseVisitor::visitMulOp(MulOp *t) {} //abstract class
 void BaseVisitor::visitRelOp(RelOp *t) {} //abstract class
 
+void BaseVisitor::visitStringLit(StringLit *p)
+{
+  JLC_ASSERT(false, "Visitor function not implemented!");
+}
+
+void BaseVisitor::visitETyped(ETyped *p)
+{
+  JLC_ASSERT(false, "Visitor function not implemented!");
+}
+
 void BaseVisitor::visitProgram(Program *program)
 {
   JLC_ASSERT(false, "Visitor function not implemented!");

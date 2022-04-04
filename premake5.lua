@@ -4,10 +4,21 @@ function preExecuteLinux()
     os.execute("bison -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C")
 end
 
+function preExecuteWindows()
+    os.execute("bnfc.exe -m -l -p bnfc --cpp -o bnfc src/Javalette.cf")
+    os.execute("xcopy /y src\\Javalette.y bnfc")
+    os.execute(".\\flexbison\\win_flex.exe -Pjavalette_ -o bnfc/Lexer.C bnfc/Javalette.l")
+    os.execute(".\\flexbison\\win_bison.exe -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C")
+end
+
 local install_name = "partA-2.tar.gz" -- Update each iteration
 
-if _ACTION == "codelite" or _ACTION == "gmake2" then
+if _OS == "linux" or _OS == "macosx" then
     preExecuteLinux()
+end
+
+if _OS == "windows" then
+    preExecuteWindows()
 end
 
 workspace "JavaletteCompiler"
@@ -23,6 +34,7 @@ workspace "JavaletteCompiler"
         "MultiProcessorCompile"
     }
 
+    symbols "On"
     compileas "C++"
 
     outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"

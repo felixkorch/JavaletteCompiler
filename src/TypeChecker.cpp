@@ -81,7 +81,8 @@ void FunctionChecker::visitArgument(Argument *p)
 }
 
 /********************   StatementChecker class    ********************/
-#define SWAP(EXPR, TYPED) delete EXPR; EXPR = TYPED;
+// TODO: Why can't I delete EXPR? Gives segfault somehow connected to the printer (when running sandbox)
+#define SWAP(EXPR, TYPED) (EXPR) = TYPED;
 
 void StatementChecker::visitBStmt(BStmt *p)
 {
@@ -112,12 +113,12 @@ void StatementChecker::visitCond(Cond *p)
 {
     auto exprTyped = TypeInferrer::getValue(p->expr_, env_);
     auto exprType = TypeCoder::getValue(exprTyped->type_);
-    SWAP(p->expr_, exprTyped);
     if(exprType != TypeCode::BOOLEAN) {
         throw TypeError("Expected boolean in cond, got " +
                         toString(exprType), p->line_number, p->char_number);
     }
 
+    SWAP(p->expr_, exprTyped);
     p->stmt_->accept(this);
 }
 
@@ -125,12 +126,12 @@ void StatementChecker::visitCondElse(CondElse *p)
 {
     auto exprTyped = TypeInferrer::getValue(p->expr_, env_);
     auto exprType = TypeCoder::getValue(exprTyped->type_);
-    SWAP(p->expr_, exprTyped);
     if(exprType != TypeCode::BOOLEAN) {
         throw TypeError("Expected boolean in cond, got " +
                         toString(exprType), p->line_number, p->char_number);
     }
 
+    SWAP(p->expr_, exprTyped);
     p->stmt_1->accept(this);
     p->stmt_2->accept(this);
 }
@@ -139,13 +140,13 @@ void StatementChecker::visitWhile(While *p)
 {
     ETyped* exprTyped = TypeInferrer::getValue(p->expr_, env_);
     auto exprType = TypeCoder::getValue(exprTyped->type_);
-    SWAP(p->expr_, exprTyped);
 
     if(exprType != TypeCode::BOOLEAN) {
         throw TypeError("Expected boolean in cond, got " +
                         toString(exprType), p->line_number, p->char_number);
     }
 
+    SWAP(p->expr_, exprTyped);
     p->stmt_->accept(this);
 }
 
@@ -177,25 +178,25 @@ void StatementChecker::visitAss(Ass *p)
     auto assType = env_.findVar(p->ident_, p->line_number, p->char_number);
     auto exprTyped = TypeInferrer::getValue(p->expr_, env_);
     auto exprType = TypeCoder::getValue(exprTyped->type_);
-    SWAP(p->expr_, exprTyped);
 
     if (assType != exprType) {
         throw TypeError(env_.Print(p->expr_) + " has type " + toString(exprType)
                         + ", expected " + toString(assType)
-                        + " for variable " + p->ident_);
+                        + " for variable " + p->ident_, p->line_number, p->char_number);
     }
+    SWAP(p->expr_, exprTyped);
 }
 
 void StatementChecker::visitRet(Ret *p)
 {
     auto exprTyped = TypeInferrer::getValue(p->expr_, env_);
     auto exprType = TypeCoder::getValue(exprTyped->type_);
-    SWAP(p->expr_, exprTyped);
     if(exprType != currentFn_.second.returnType) { // TODO: Make variable names better
         throw TypeError("Expected return type for function " + currentFn_.first +
                         " is " + toString(currentFn_.second.returnType) +
                         ", but got " + toString(exprType), p->line_number, p->char_number);
     }
+    SWAP(p->expr_, exprTyped);
 }
 
 void StatementChecker::visitVRet(VRet *p)
@@ -212,9 +213,9 @@ void StatementChecker::visitSExp(SExp *p)
     // e.g. printString("hello");
     ETyped* exprTyped = TypeInferrer::getValue(p->expr_, env_);
     auto exprType = TypeCoder::getValue(exprTyped->type_);
-    SWAP(p->expr_, exprTyped);
     if(exprType != TypeCode::VOID)
         throw TypeError("Expression should be of type void", p->line_number, p->char_number);
+    SWAP(p->expr_, exprTyped);
 }
 
 void StatementChecker::visitEmpty(Empty *p)
@@ -266,11 +267,11 @@ void DeclHandler::visitInit(Init *p)
     env_.addVar(p->ident_, t);
     ETyped* exprTyped = TypeInferrer::getValue(p->expr_, env_);
     TypeCode exprType = TypeCoder::getValue(exprTyped->type_);
-    SWAP(p->expr_, exprTyped);
     if(t != exprType) {
         throw TypeError("expected type is " + toString(t) +
                         ", but got " + toString(exprType), p->expr_->line_number, p->expr_->char_number);
     }
+    SWAP(p->expr_, exprTyped);
 }
 
 void DeclHandler::visitNoInit(NoInit *p)
@@ -322,11 +323,11 @@ Type* TypeInferrer::checkUnExp(Expr* e, const std::string& op,
     return eAnnotated->type_;
 }
 
-void TypeInferrer::visitELitInt(ELitInt *p) { v = new ETyped(p, new Int); }
-void TypeInferrer::visitELitDoub(ELitDoub *p) { v = new ETyped(p, new Doub); }
-void TypeInferrer::visitELitFalse(ELitFalse *p) { v = new ETyped(p, new Bool); }
-void TypeInferrer::visitELitTrue(ELitTrue *p) { v = new ETyped(p, new Bool); }
-void TypeInferrer::visitEString(EString *p) { v = new ETyped(p, new StringLit); }
+void TypeInferrer::visitELitInt(ELitInt *p) { v = new ETyped(p, new Int()); }
+void TypeInferrer::visitELitDoub(ELitDoub *p) { v = new ETyped(p, new Doub()); }
+void TypeInferrer::visitELitFalse(ELitFalse *p) { v = new ETyped(p, new Bool()); }
+void TypeInferrer::visitELitTrue(ELitTrue *p) { v = new ETyped(p, new Bool()); }
+void TypeInferrer::visitEString(EString *p) { v = new ETyped(p, new StringLit()); }
 
 void TypeInferrer::visitEVar(EVar *p) {
     TypeCode varType = env_.findVar(p->ident_, p->line_number, p->char_number);
@@ -443,6 +444,7 @@ void TypeInferrer::visitEApp(EApp *p)
             throw TypeError("In call to fn " + p->ident_ + ", expected arg " + toString(*itArg) +
                             ", but got " + toString(exprListType), p->line_number, p->char_number);
         }
+        SWAP(*itList, exprListTyped);
     }
     v = new ETyped(p, TypeConstructor(fnType.returnType));
 }
@@ -531,11 +533,11 @@ const std::string toString(OperatorCode c) {
 Type* TypeConstructor(TypeCode t)
 {
     switch (t) {
-        case TypeCode::INT:      return new Int;
-        case TypeCode::DOUBLE:   return new Doub;
-        case TypeCode::BOOLEAN:  return new Bool;
-        case TypeCode::VOID:     return new Void;
-        default:                 return new Int;
+        case TypeCode::INT:      return new Int();
+        case TypeCode::DOUBLE:   return new Doub();
+        case TypeCode::BOOLEAN:  return new Bool();
+        case TypeCode::VOID:     return new Void();
+        default:                 return new Int();
     }
 }
 

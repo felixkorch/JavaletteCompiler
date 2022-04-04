@@ -27,8 +27,7 @@ null.d
 .DS_Store
 
 ## Windows specific
-
+flexbison
 premake5.exe
 .vs
-win_flex
 *.exe

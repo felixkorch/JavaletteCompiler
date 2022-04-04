@@ -18,7 +18,6 @@ compile_flags.txt
 tags
 *.make
 install/
-Makefile
 wip/
 null.d
 

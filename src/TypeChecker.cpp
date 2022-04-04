@@ -81,7 +81,6 @@ void FunctionChecker::visitArgument(Argument *p)
 }
 
 /********************   StatementChecker class    ********************/
-// TODO: Why can't I delete EXPR? Gives segfault somehow connected to the printer (when running sandbox)
 #define SWAP(EXPR, TYPED) (EXPR) = TYPED;
 
 void StatementChecker::visitBStmt(BStmt *p)

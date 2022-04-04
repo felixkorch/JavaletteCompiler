@@ -25,7 +25,7 @@ enum class OperatorCode {
 
 const std::string toString(TypeCode t);
 const std::string toString(OperatorCode c);
-Type* TypeConstructor(TypeCode t);
+Type* NewType(TypeCode t);
 
 struct FunctionType {
     std::list<TypeCode> args;
@@ -74,27 +74,27 @@ public:
 
 class OperatorVisitor : public BaseVisitor, public ValueGetter<OperatorCode, OperatorVisitor, Env> {
 public:
-    void visitLE  (LE  *p) override { v = OperatorCode::LE;  }
-    void visitLTH (LTH *p) override { v = OperatorCode::LTH; }
-    void visitGE  (GE  *p) override { v = OperatorCode::GE;  }
-    void visitEQU (EQU *p) override { v = OperatorCode::EQU; }
-    void visitNE  (NE  *p) override { v = OperatorCode::NE;  }
-    void visitGTH (GTH *p) override { v = OperatorCode::GTH; }
-    void visitPlus (Plus *p) override { v = OperatorCode::PLUS; }
-    void visitMinus (Minus *p) override { v = OperatorCode::MINUS; }
-    void visitTimes (Times *p) override { v = OperatorCode::TIMES; }
-    void visitDiv (Div *p) override { v = OperatorCode::DIV; }
-    void visitMod (Mod *p) override { v = OperatorCode::MOD; }
+    void visitLE  (LE  *p) override { Return(OperatorCode::LE);  }
+    void visitLTH (LTH *p) override { Return(OperatorCode::LTH); }
+    void visitGE  (GE  *p) override { Return(OperatorCode::GE);  }
+    void visitEQU (EQU *p) override { Return(OperatorCode::EQU); }
+    void visitNE  (NE  *p) override { Return(OperatorCode::NE);  }
+    void visitGTH (GTH *p) override { Return(OperatorCode::GTH); }
+    void visitPlus (Plus *p) override { Return(OperatorCode::PLUS); }
+    void visitMinus (Minus *p) override { Return(OperatorCode::MINUS); }
+    void visitTimes (Times *p) override { Return(OperatorCode::TIMES); }
+    void visitDiv (Div *p) override { Return(OperatorCode::DIV); }
+    void visitMod (Mod *p) override { Return(OperatorCode::MOD); }
 };
 
 //  Returns the typecode for a Type
 class TypeCoder : public BaseVisitor, public ValueGetter<TypeCode, TypeCoder, Env> {
 public:
-    void visitInt(Int *p)   override { v = TypeCode::INT; }
-    void visitDoub(Doub *p) override { v = TypeCode::DOUBLE; }
-    void visitBool(Bool *p) override { v = TypeCode::BOOLEAN; }
-    void visitVoid(Void *p) override { v = TypeCode::VOID; }
-    void visitStringLit(StringLit *p) override { v = TypeCode::STRING; }
+    void visitInt(Int *p)   override { Return(TypeCode::INT); }
+    void visitDoub(Doub *p) override { Return(TypeCode::DOUBLE); }
+    void visitBool(Bool *p) override { Return(TypeCode::BOOLEAN); }
+    void visitVoid(Void *p) override { Return(TypeCode::VOID); }
+    void visitStringLit(StringLit *p) override { Return(TypeCode::STRING); }
     void visitArgument(Argument *p) override { p->type_->accept(this); }
 };
 
@@ -169,7 +169,7 @@ public:
 class ReturnChecker : public BaseVisitor, public ValueGetter<bool, ReturnChecker, Env> {
     Env& env_;
 public:
-    explicit ReturnChecker(Env& env): env_(env) { v = false; }
+    explicit ReturnChecker(Env& env): env_(env) { Return(false); }
 
     void visitBStmt(BStmt *p) override;
     void visitDecr(Decr *p) override;

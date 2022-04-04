@@ -10,22 +10,24 @@ namespace typechecker
     template <class ValueType, class VisitorImpl, class Context>
     class ValueGetter {
     protected:
-        ValueType v;
+        ValueType v_;
     public:
         // Dispatches a new VisitorImpl and visits, it then puts the result in "v" which is available in VisitorImpl.
-        static ValueType getValue(Visitable* p, Context& env)
+        static ValueType Get(Visitable* p, Context& ctx)
         {
-            VisitorImpl visitor(env);
+            VisitorImpl visitor(ctx);
             p->accept(&visitor);
-            return visitor.v;
+            return visitor.v_;
         }
 
-        static ValueType getValue(Visitable* p)
+        static ValueType Get(Visitable* p)
         {
             VisitorImpl visitor;
             p->accept(&visitor);
-            return visitor.v;
+            return visitor.v_;
         }
+		
+		void Return(ValueType&& v) { v_ = v; }
     };
 
     class BaseVisitor : public Visitor {

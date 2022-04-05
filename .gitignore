@@ -22,7 +22,8 @@ wip/
 null.d
 
 ## Mac specific
-
+*.xcodeproj
+*.xcworkspace
 .DS_Store
 
 ## Windows specific

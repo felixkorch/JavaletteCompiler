@@ -23,7 +23,7 @@ MAKEFILE_DIR := $(dir $(MAKEFILE_LIST))
 
 INCLUDES := -I $(MAKEFILE_DIR) $(MAKEFILE_DIR)/src
 FLAGS := -c -std=c++11 -Wall $(INCLUDES)
-CC:= g++ -g
+CC:= g++
 
 GRAMMAR_FILE := src/Javalette.cf
 MAKE := make
@@ -36,7 +36,7 @@ FLEX_OPTS=-Pjavalette_
 BISON=bison
 BISON_OPTS=-t -pjavalette_
 
-.PHONY: all clean
+.PHONY: all clean debug
 
 all: $(COMPILER_NAME)
 
@@ -44,13 +44,16 @@ debug: FLAGS += -DDEBUG -g
 debug: $(COMPILER_NAME)
 
 clean:
-	rm -rf $(GEN_DIR) build bin
+	rm -rf $(GEN_DIR) build
 
 $(COMPILER_NAME): $(OBJ) $(MAIN_OBJ) | $(BIN_DIR)
 	$(CC) -o $(BIN_DIR)/$@ $^
 
 $(GEN_SRC)&:
-	$(BNFC_CMD) && cp -f src/Javalette.y bnfc/
+	$(BNFC_CMD)
+
+cpbisonfile: $(GEN_DIR)/Javalette.y
+	cp -f src/Javalette.y bnfc/
 
 $(OBJ): | $(OBJ_DIR)
 
@@ -77,8 +80,8 @@ $(OBJ_DIR)/Buffer.o : $(GEN_DIR)/Buffer.C $(GEN_DIR)/Buffer.H
 $(GEN_DIR)/Lexer.C : $(GEN_DIR)/Javalette.l
 	$(FLEX) $(FLEX_OPTS) -o $(GEN_DIR)/Lexer.C $(GEN_DIR)/Javalette.l
 
-$(GEN_DIR)/Parser.C $(GEN_DIR)/Bison.H &: $(GEN_DIR)/Javalette.y
-	$(BISON) $(BISON_OPTS) $(GEN_DIR)/Javalette.y -o $(GEN_DIR)/Parser.C && mv Bison.H $(GEN_DIR)/
+$(GEN_DIR)/Parser.C $(GEN_DIR)/Bison.H &: | cpbisonfile
+	$(BISON) $(BISON_OPTS) $(GEN_DIR)/Javalette.y -o $(GEN_DIR)/Parser.C
 
 $(OBJ_DIR)/Lexer.o : FLAGS_BNFC+=-Wno-sign-conversion 
 

@@ -58,6 +58,8 @@ Bool.      Type ::= "boolean" ;
 
 Void.      Type ::= "void" ;
 
+internal StringLit. Type ::= "string" ;
+
 internal   Fun. Type ::= Type "(" [Type] ")" ;
 
 separator  Type "," ;
@@ -91,6 +93,8 @@ ERel.      Expr2 ::= Expr2 RelOp Expr3 ;
 EAnd.      Expr1 ::= Expr2 "&&" Expr1 ;
 
 EOr.       Expr ::= Expr1 "||" Expr ;
+
+internal ETyped. Expr ::= "[" Expr ":" Type "]" ;
 
 coercions  Expr 6 ;
 

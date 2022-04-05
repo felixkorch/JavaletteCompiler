@@ -1,10 +1,8 @@
 #include "bnfc/ParserError.H"
 #include "bnfc/Parser.H"
-#include "TypeChecker.h"
-#include "TypeError.h"
+#include "src/TypeChecker.h"
+#include "src/TypeError.h"
 
-#include <iostream>
-#include <memory>
 
 int main(int argc, char ** argv)
 {
@@ -24,12 +22,22 @@ int main(int argc, char ** argv)
     try {
         parse_tree = bnfc::pProg(input);
     } catch( bnfc::parse_error &e) {
-        std::cerr << "ERROR: Parse error on line " << e.getLine() << std::endl;
+        std::cerr << "ERROR: Parse error on line " << e.getLine() << "\n";
     }
+    
+    //bnfc::PrintAbsyn* printer = new bnfc::PrintAbsyn;
+    bnfc::ShowAbsyn absyn;
 
     if (parse_tree) {
         try {
-            typechecker::run(parse_tree);
+            // Print program before typechecking
+            //auto prog = (bnfc::Program*)parse_tree;
+            //std::cout << printer.print(prog) << std::endl;
+            auto progAfter = typechecker::run(parse_tree);
+            // Print program after typechecking
+            //std::cout << printer->print(progAfter) << std::endl;
+            std::cout << absyn.show(progAfter) << std::endl;
+            
         }catch(typechecker::TypeError &e) {
             std::cerr << e.what() << "\n";
             return 1;

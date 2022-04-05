@@ -1,11 +1,12 @@
 #pragma once
 #include "bnfc/Absyn.H"
-#include "bnfc/Skeleton.H"
-#include "bnfc/Printer.h"
+#include "bnfc/Printer.H"
 #include "TypeError.h"
+#include "BaseVisitor.h"
 #include <unordered_map>
 #include <algorithm>
 #include <list>
+#include <memory>
 
 namespace typechecker {
 
@@ -15,92 +16,104 @@ enum class TypeCode {
     INT, DOUBLE, BOOLEAN, VOID, STRING, ERROR
 };
 
-enum class RelOpCode {
-    LTH , LE, GTH, GE, EQU, NE
+enum class OpCode {
+    LTH , LE, GTH, GE, EQU, NE, // RelOP
+    PLUS, MINUS,                // AddOP
+    TIMES, DIV, MOD,            // MulOP
+    AND, OR, NOT, NEG           // Other
 };
+
+const std::string toString(TypeCode t);
+const std::string toString(OpCode c);
+Type* newType(TypeCode t);
 
 struct FunctionType {
     std::list<TypeCode> args;
-    TypeCode returnType;
+    TypeCode ret;
+};
+
+struct Signature {
+    std::string name;
+    FunctionType type;
 };
 
 using ScopeType = std::unordered_map<std::string, TypeCode>; // Map of (Var -> Type)
-using SignatureType = std::pair<std::string, FunctionType>;  // Pair   (name, FunctionType)
 
 class Env {
+    // Defines the environment of the program
     std::list<ScopeType> scopes_;
     std::unordered_map<std::string, FunctionType> signatures_;
-    SignatureType currentFn_;
+    Signature currentFn_;
 
+    /* Not related to the semantics of the type-checker, just for passing around a printing object. */
+    std::unique_ptr<PrintAbsyn> printer_;
 public:
+    Env()
+    : scopes_()
+    , signatures_()
+    , currentFn_()
+    , printer_(new PrintAbsyn()) {}
+
     void enterScope();
     void exitScope();
     void enterFn(const std::string& fnName);
-    SignatureType& getCurrentFunction();
+    Signature& getCurrentFunction();
 
     // In the future: could enter scope in constructor to allow global vars
 
+    // Called in the first pass of the type-checker
     void addSignature(const std::string& fnName, const FunctionType& t);
 
-    // Called when it's used in an expression, if it doesn't exist, throw
+    // Called when it's used in an expression, throws if the variable doesn't exist.
     TypeCode findVar(const std::string& var, int lineNr, int charNr);
-
+    // Called when a function call is invoked, throws if the function doesn't exist.
     FunctionType& findFn(const std::string& fn, int lineNr, int charNr);
-
+    // Adds a variable to the current scope, throws if it already exists.
     void addVar(const std::string& name, TypeCode t);
+
+    /* Not related to the semantics of the type-checker, just for printing */
+    inline const std::string Print(Visitable* v) { return printer_->print(v); }
+
 };
 
-// Creates an alias that makes more sense.
-using BaseVisitor = Skeleton;
-
-// This class adds the ability to extend the Visitor interface by using templates, which makes it
-// possible to artificially return values.
-template <class ValueType, class VisitableType, class VisitorImpl>
-class ValueGetter {
-protected:
-    ValueType v;
+//  Returns the OpCode for an Operation
+class OpCoder : public BaseVisitor, public ValueGetter<OpCode, OpCoder, Env> {
 public:
-    // Dispatches a new VisitorImpl and visits, it then puts the result in "v" which is available in VisitorImpl.
-    static ValueType getValue(VisitableType* p, Env& env)
-    {
-        VisitorImpl visitor(env);
-        p->accept(&visitor);
-        return visitor.v;
-    }
-
-    static ValueType getValue(VisitableType* p)
-    {
-        VisitorImpl visitor;
-        p->accept(&visitor);
-        return visitor.v;
-    }
+    void visitLE  (LE  *p) override { Return(OpCode::LE);  }
+    void visitLTH (LTH *p) override { Return(OpCode::LTH); }
+    void visitGE  (GE  *p) override { Return(OpCode::GE);  }
+    void visitEQU (EQU *p) override { Return(OpCode::EQU); }
+    void visitNE  (NE  *p) override { Return(OpCode::NE);  }
+    void visitGTH (GTH *p) override { Return(OpCode::GTH); }
+    void visitPlus (Plus *p) override { Return(OpCode::PLUS); }
+    void visitMinus (Minus *p) override { Return(OpCode::MINUS); }
+    void visitTimes (Times *p) override { Return(OpCode::TIMES); }
+    void visitDiv (Div *p) override { Return(OpCode::DIV); }
+    void visitMod (Mod *p) override { Return(OpCode::MOD); }
 };
 
-class RelOpVisitor : public BaseVisitor, public ValueGetter<RelOpCode, Visitable, RelOpVisitor> {
+//  Returns the TypeCode for a Type
+class TypeCoder : public BaseVisitor, public ValueGetter<TypeCode, TypeCoder, Env> {
 public:
-    void visitLE  (LE  *p) override { v = RelOpCode::LE;  }
-    void visitLTH (LTH *p) override { v = RelOpCode::LTH; }
-    void visitGE  (GE  *p) override { v = RelOpCode::GE;  }
-    void visitEQU (EQU *p) override { v = RelOpCode::EQU; }
-    void visitNE  (NE  *p) override { v = RelOpCode::NE;  }
-    void visitGTH (GTH *p) override { v = RelOpCode::GTH; }
+    void visitInt(Int *p)   override { Return(TypeCode::INT); }
+    void visitDoub(Doub *p) override { Return(TypeCode::DOUBLE); }
+    void visitBool(Bool *p) override { Return(TypeCode::BOOLEAN); }
+    void visitVoid(Void *p) override { Return(TypeCode::VOID); }
+    void visitStringLit(StringLit *p) override { Return(TypeCode::STRING); }
+    void visitArgument(Argument *p) override { p->type_->accept(this); }
 };
 
-class TypeInferrer : public BaseVisitor, public ValueGetter<TypeCode, Visitable, TypeInferrer> {
+// Returns an annotated version of the expression and checks the compatability between operands and supported types for operators.
+class TypeInferrer : public BaseVisitor, public ValueGetter<ETyped*, TypeInferrer, Env> {
     Env& env_;
-    PrintAbsyn printer_;
 
     static bool typeIn(TypeCode t, std::initializer_list<TypeCode> list);
-    void checkBinExp(Expr* e1, Expr* e2, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
-    void checkUnExp(Expr* e, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
+    Type* checkBinExp(Expr* e1, Expr* e2, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
+    Type* checkUnExp(Expr* e, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
 
 public:
-    explicit TypeInferrer(Env& env): ValueGetter(), env_(env), printer_() {}
+    explicit TypeInferrer(Env& env): ValueGetter(), env_(env) {}
 
-    void visitInt(Int *p) override;
-    void visitDoub(Doub *p) override;
-    void visitBool(Bool *p) override;
-    void visitVoid(Void *p) override;
     void visitELitInt(ELitInt *p) override;
     void visitELitDoub(ELitDoub *p) override;
     void visitELitFalse(ELitFalse *p) override;
@@ -117,14 +130,14 @@ public:
     void visitNeg(Neg *p) override;
     void visitERel(ERel *p) override;
     void visitEApp(EApp *p) override;
+    void visitEString(EString *p) override;
 };
 
 class DeclHandler : public BaseVisitor {
     Env& env_;
-    PrintAbsyn printer_;
-    TypeCode t;
+    TypeCode t; // Type of declaration of variable
 public:
-    explicit DeclHandler(Env& env): env_(env), printer_(), t(TypeCode::ERROR) {}
+    explicit DeclHandler(Env& env): env_(env), t(TypeCode::ERROR) {}
 
     void visitDecl(Decl *p) override;
     void visitListItem(ListItem *p) override;
@@ -133,14 +146,12 @@ public:
 
 };
 
-// For now it checks a sequence of statements for the same visitor-object
+// Checks a sequence of statements for the same visitor-object
 class StatementChecker : public BaseVisitor {
     Env& env_;
-    PrintAbsyn printer_;
-    SignatureType currentFn_;
-    int retCount_;
+    Signature currentFn_;
 public:
-    explicit StatementChecker(Env& env): env_(env), printer_(), retCount_(0) {}
+    explicit StatementChecker(Env& env): env_(env) {}
 
     void visitBStmt(BStmt *p) override;
     void visitDecr(Decr *p) override;
@@ -155,18 +166,40 @@ public:
     void visitRet(Ret *p) override;
     void visitVRet(VRet *p) override;
     void visitSExp(SExp *p) override;
+    void visitEmpty(Empty *p) override;
+
+};
+
+// Checks that the function returns a value (for non-void). True if OK.
+class ReturnChecker : public BaseVisitor, public ValueGetter<bool, ReturnChecker, Env> {
+    Env& env_;
+public:
+    explicit ReturnChecker(Env& env): env_(env) { v_ = false ; }
+
+    void visitBStmt(BStmt *p) override;
+    void visitDecr(Decr *p) override;
+    void visitIncr(Incr *p) override;
+    void visitCond(Cond *p) override;
+    void visitCondElse(CondElse *p) override;
+    void visitWhile(While *p) override;
+    void visitBlock(Block *p) override;
+    void visitDecl(Decl *p) override;
+    void visitListStmt(ListStmt *p) override;
+    void visitAss(Ass *p) override;
+    void visitRet(Ret *p) override;
+    void visitVRet(VRet *p) override;
+    void visitSExp(SExp *p) override;
+    void visitEmpty(Empty *p) override;
 
 };
 
 class FunctionChecker : public BaseVisitor {
     Env& env_;
     StatementChecker statementChecker;
-    PrintAbsyn printer_; // TODO: Maybe have a common printer across classes
 public:
     explicit FunctionChecker(Env& env)
     : env_(env)
-    , statementChecker(env)
-    , printer_() {}
+    , statementChecker(env) {}
 
     void visitFnDef(FnDef *p) override;
     void visitBlock(Block *p) override;

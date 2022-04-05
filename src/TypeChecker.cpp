@@ -25,14 +25,14 @@ void ProgramChecker::visitListTopDef(ListTopDef *p) {
     env_.addSignature("readDouble", { {}, TypeCode::DOUBLE });
 
     // First pass to aggregate the list of functions in signatures_
-    for(auto it : *p)
+    for(TopDef* it : *p)
         it->accept(this);
 
     // Check that main exists
     env_.findFn("main", 1, 1);
 
     // Check all the functions one by one
-    for(auto it : *p) {
+    for(TopDef* it : *p) {
         FunctionChecker fnChecker(env_);
         it->accept(&fnChecker);
     }
@@ -40,10 +40,10 @@ void ProgramChecker::visitListTopDef(ListTopDef *p) {
 
 void ProgramChecker::visitFnDef(FnDef *p)
 {
-    auto returnType = TypeCoder::Get(p->type_);
+    TypeCode returnType = TypeCoder::Get(p->type_);
 
     std::list<TypeCode> args;
-    for(auto it : *p->listarg_)
+    for(Arg* it : *p->listarg_)
         args.push_back(TypeCoder::Get(it));
 
     env_.addSignature(p->ident_, {args, returnType });
@@ -69,19 +69,21 @@ void FunctionChecker::visitBlock(Block *p)
 
 void FunctionChecker::visitListArg(ListArg *p)
 {
-    for(auto it : *p)
+    for(Arg* it : *p)
         it->accept(this);
 }
 
 void FunctionChecker::visitArgument(Argument *p)
 {
     // Each argument gets added to the env before StatementChecker takes over.
-    auto argType = TypeCoder::Get(p->type_);
+    TypeCode argType = TypeCoder::Get(p->type_);
     env_.addVar(p->ident_, argType);
 }
 
 /********************   StatementChecker class    ********************/
-#define SWAP(EXPR, TYPED) (EXPR) = TYPED;
+void inline swap(Expr* from, Expr* to){
+    from = to;
+}
 
 void StatementChecker::visitBStmt(BStmt *p)
 {
@@ -92,7 +94,7 @@ void StatementChecker::visitBStmt(BStmt *p)
 
 void StatementChecker::visitDecr(Decr *p)
 {
-    auto varType = env_.findVar(p->ident_, p->line_number, p->char_number);
+    TypeCode varType = env_.findVar(p->ident_, p->line_number, p->char_number);
     if(varType != TypeCode::INT) {
         throw TypeError("Cannot decrement " + p->ident_ + " of type " +
                         toString(varType) + ", expected type int", p->line_number, p->char_number);
@@ -101,7 +103,7 @@ void StatementChecker::visitDecr(Decr *p)
 
 void StatementChecker::visitIncr(Incr *p)
 {
-    auto varType = env_.findVar(p->ident_, p->line_number, p->char_number);
+    TypeCode varType = env_.findVar(p->ident_, p->line_number, p->char_number);
     if(varType != TypeCode::INT) {
         throw TypeError("Cannot increment " + p->ident_ + " of type " +
                         toString(varType) + ", expected type int", p->line_number, p->char_number);
@@ -110,27 +112,27 @@ void StatementChecker::visitIncr(Incr *p)
 
 void StatementChecker::visitCond(Cond *p)
 {
-    auto exprTyped = TypeInferrer::Get(p->expr_, env_);
-    auto exprType = TypeCoder::Get(exprTyped->type_);
+    ETyped* exprTyped = TypeInferrer::Get(p->expr_, env_);
+    TypeCode exprType = TypeCoder::Get(exprTyped->type_);
     if(exprType != TypeCode::BOOLEAN) {
         throw TypeError("Expected boolean in cond, got " +
                         toString(exprType), p->line_number, p->char_number);
     }
 
-    SWAP(p->expr_, exprTyped);
+    swap(p->expr_, exprTyped);
     p->stmt_->accept(this);
 }
 
 void StatementChecker::visitCondElse(CondElse *p)
 {
-    auto exprTyped = TypeInferrer::Get(p->expr_, env_);
-    auto exprType = TypeCoder::Get(exprTyped->type_);
+    ETyped* exprTyped = TypeInferrer::Get(p->expr_, env_);
+    TypeCode exprType = TypeCoder::Get(exprTyped->type_);
     if(exprType != TypeCode::BOOLEAN) {
         throw TypeError("Expected boolean in cond, got " +
                         toString(exprType), p->line_number, p->char_number);
     }
 
-    SWAP(p->expr_, exprTyped);
+    swap(p->expr_, exprTyped);
     p->stmt_1->accept(this);
     p->stmt_2->accept(this);
 }
@@ -138,20 +140,20 @@ void StatementChecker::visitCondElse(CondElse *p)
 void StatementChecker::visitWhile(While *p)
 {
     ETyped* exprTyped = TypeInferrer::Get(p->expr_, env_);
-    auto exprType = TypeCoder::Get(exprTyped->type_);
+    TypeCode exprType = TypeCoder::Get(exprTyped->type_);
 
     if(exprType != TypeCode::BOOLEAN) {
         throw TypeError("Expected boolean in cond, got " +
                         toString(exprType), p->line_number, p->char_number);
     }
 
-    SWAP(p->expr_, exprTyped);
+    swap(p->expr_, exprTyped);
     p->stmt_->accept(this);
 }
 
 void StatementChecker::visitBlock(Block *p)
 {
-    for(auto it : *p->liststmt_)
+    for(Stmt* it : *p->liststmt_)
         it->accept(this);
 }
 
@@ -166,43 +168,43 @@ void StatementChecker::visitListStmt(ListStmt *p)
     // TODO: Might move this loop to function-level
     // Entrypoint for checking a sequence of statements
     currentFn_ = env_.getCurrentFunction();
-    for(auto it : *p)
+    for(Stmt* it : *p)
         it->accept(this);
-    if(!ReturnChecker::Get(p, env_) && currentFn_.second.returnType != TypeCode::VOID)
-        throw TypeError("Non-void function " + currentFn_.first + " has to return a value"); // TODO: Make variable names better
+    if(ReturnChecker::Get(p, env_) == false && currentFn_.type.ret != TypeCode::VOID)
+        throw TypeError("Non-void function " + currentFn_.name + " has to return a value");
 }
 
 void StatementChecker::visitAss(Ass *p)
 {
-    auto assType = env_.findVar(p->ident_, p->line_number, p->char_number);
-    auto exprTyped = TypeInferrer::Get(p->expr_, env_);
-    auto exprType = TypeCoder::Get(exprTyped->type_);
+    TypeCode assignType = env_.findVar(p->ident_, p->line_number, p->char_number);
+    ETyped* exprTyped = TypeInferrer::Get(p->expr_, env_);
+    TypeCode exprType = TypeCoder::Get(exprTyped->type_);
 
-    if (assType != exprType) {
+    if (assignType != exprType) {
         throw TypeError(env_.Print(p->expr_) + " has type " + toString(exprType)
-                        + ", expected " + toString(assType)
+                        + ", expected " + toString(assignType)
                         + " for variable " + p->ident_, p->line_number, p->char_number);
     }
-    SWAP(p->expr_, exprTyped);
+    swap(p->expr_, exprTyped);
 }
 
 void StatementChecker::visitRet(Ret *p)
 {
-    auto exprTyped = TypeInferrer::Get(p->expr_, env_);
-    auto exprType = TypeCoder::Get(exprTyped->type_);
-    if(exprType != currentFn_.second.returnType) { // TODO: Make variable names better
-        throw TypeError("Expected return type for function " + currentFn_.first +
-                        " is " + toString(currentFn_.second.returnType) +
+    ETyped* exprTyped = TypeInferrer::Get(p->expr_, env_);
+    TypeCode exprType = TypeCoder::Get(exprTyped->type_);
+    if(exprType != currentFn_.type.ret) {
+        throw TypeError("Expected return type for function " + currentFn_.name +
+                        " is " + toString(currentFn_.type.ret) +
                         ", but got " + toString(exprType), p->line_number, p->char_number);
     }
-    SWAP(p->expr_, exprTyped);
+    swap(p->expr_, exprTyped);
 }
 
 void StatementChecker::visitVRet(VRet *p)
 {
-    if(TypeCode::VOID != currentFn_.second.returnType) { // TODO: Make variable names better
-        throw TypeError("Expected return type for function " + currentFn_.first +
-                        " is " + toString(currentFn_.second.returnType) +
+    if(TypeCode::VOID != currentFn_.type.ret) {
+        throw TypeError("Expected return type for function " + currentFn_.name +
+                        " is " + toString(currentFn_.type.ret) +
                         ", but got " + toString(TypeCode::VOID), p->line_number, p->char_number);
     }
 }
@@ -211,16 +213,16 @@ void StatementChecker::visitSExp(SExp *p)
 {
     // e.g. printString("hello");
     ETyped* exprTyped = TypeInferrer::Get(p->expr_, env_);
-    auto exprType = TypeCoder::Get(exprTyped->type_);
+    TypeCode exprType = TypeCoder::Get(exprTyped->type_);
     if(exprType != TypeCode::VOID)
         throw TypeError("Expression should be of type void", p->line_number, p->char_number);
-    SWAP(p->expr_, exprTyped);
+    swap(p->expr_, exprTyped);
 }
 
 void StatementChecker::visitEmpty(Empty *p)
 {
     // Called e.g, when cond has no statement (i.e empty):
-    // if (false);
+    // if (false); or just ;
 }
 
 /********************   ReturnChecker class    ********************/
@@ -231,20 +233,34 @@ void StatementChecker::visitEmpty(Empty *p)
 // Notes: * if-statement ignored because it's not enough if it returns, so it becomes irrelevant
 //        * the control-flow will always pass through either if/else so if both returns, then it's OK.
 
-void ReturnChecker::visitBStmt(BStmt *p){ p->blk_->accept(this); }
 void ReturnChecker::visitDecr(Decr *p) {}
 void ReturnChecker::visitIncr(Incr *p) {}
-void ReturnChecker::visitCond(Cond *p) {}
-void ReturnChecker::visitCondElse(CondElse *p) { if(ReturnChecker::Get(p->stmt_1, env_) && ReturnChecker::Get(p->stmt_2, env_)) Return(true); }
 void ReturnChecker::visitWhile(While *p) {}
-void ReturnChecker::visitBlock(Block *p) { for(auto it : *p->liststmt_) it->accept(this); }
 void ReturnChecker::visitDecl(Decl *p) {}
-void ReturnChecker::visitListStmt(ListStmt *p) { for(auto it : *p) it->accept(this); }
 void ReturnChecker::visitAss(Ass *p) {}
-void ReturnChecker::visitRet(Ret *p) { Return(true); }
 void ReturnChecker::visitVRet(VRet *p) {}
 void ReturnChecker::visitSExp(SExp *p) {}
 void ReturnChecker::visitEmpty(Empty *p) {}
+void ReturnChecker::visitCond(Cond *p) {}
+
+void ReturnChecker::visitBStmt(BStmt *p){
+    p->blk_->accept(this);
+}
+void ReturnChecker::visitRet(Ret *p) {
+    Return(true);
+}
+void ReturnChecker::visitBlock(Block *p) {
+    for(Stmt* it : *p->liststmt_)
+        it->accept(this);
+}
+void ReturnChecker::visitListStmt(ListStmt *p) {
+    for(auto it : *p)
+        it->accept(this);
+}
+void ReturnChecker::visitCondElse(CondElse *p) {
+    if(ReturnChecker::Get(p->stmt_1, env_) && ReturnChecker::Get(p->stmt_2, env_))
+        Return(true);
+}
 
 
 /********************   DeclHandler class    ********************/
@@ -257,7 +273,7 @@ void DeclHandler::visitDecl(Decl *p)
 
 void DeclHandler::visitListItem(ListItem *p)
 {
-    for(auto it : *p)
+    for(Item* it : *p)
         it->accept(this);
 }
 
@@ -270,7 +286,7 @@ void DeclHandler::visitInit(Init *p)
         throw TypeError("expected type is " + toString(t) +
                         ", but got " + toString(exprType), p->expr_->line_number, p->expr_->char_number);
     }
-    SWAP(p->expr_, exprTyped);
+    swap(p->expr_, exprTyped);
 }
 
 void DeclHandler::visitNoInit(NoInit *p)
@@ -280,21 +296,19 @@ void DeclHandler::visitNoInit(NoInit *p)
 
 /********************   TypeInferrer class    ********************/
 
-bool TypeInferrer::typeIn(TypeCode t, std::initializer_list<TypeCode> list)
-{
-    for(auto elem : list)
+bool TypeInferrer::typeIn(TypeCode t, std::initializer_list<TypeCode> list) {
+    for(TypeCode elem : list)
         if(t == elem) return true;
     return false;
 }
 
 // Could be arithmetic / relative
 Type* TypeInferrer::checkBinExp(Expr* e1, Expr* e2, const std::string& op,
-                 std::initializer_list<TypeCode> allowedTypes)
-{
-    auto e1Annotated = TypeInferrer::Get(e1, env_);
-    auto e2Annotated = TypeInferrer::Get(e2, env_);
-    auto e1Type = TypeCoder::Get(e1Annotated->type_);
-    auto e2Type = TypeCoder::Get(e2Annotated->type_);
+                 std::initializer_list<TypeCode> allowedTypes) {
+    ETyped* e1Annotated = TypeInferrer::Get(e1, env_);
+    ETyped* e2Annotated = TypeInferrer::Get(e2, env_);
+    TypeCode e1Type = TypeCoder::Get(e1Annotated->type_);
+    TypeCode e2Type = TypeCoder::Get(e2Annotated->type_);
 
     if(!typeIn(e1Type, allowedTypes) ||
        !typeIn(e2Type, allowedTypes)) {
@@ -312,8 +326,8 @@ Type* TypeInferrer::checkBinExp(Expr* e1, Expr* e2, const std::string& op,
 Type* TypeInferrer::checkUnExp(Expr* e, const std::string& op,
                 std::initializer_list<TypeCode> allowedTypes)
 {
-    auto eTyped = TypeInferrer::Get(e, env_);
-    auto eTypeCode = TypeCoder::Get(eTyped->type_);
+    ETyped* eTyped = TypeInferrer::Get(e, env_);
+    TypeCode eTypeCode = TypeCoder::Get(eTyped->type_);
 
     if(!typeIn(eTypeCode, allowedTypes)) {
         throw TypeError("Invalid operand of type " + toString(eTypeCode) +
@@ -322,28 +336,28 @@ Type* TypeInferrer::checkUnExp(Expr* e, const std::string& op,
     return eTyped->type_;
 }
 
-void TypeInferrer::visitELitInt(ELitInt *p) { Return(new ETyped(p, new Int())); }
-void TypeInferrer::visitELitDoub(ELitDoub *p) { Return(new ETyped(p, new Doub())); }
-void TypeInferrer::visitELitFalse(ELitFalse *p) { Return(new ETyped(p, new Bool())); }
-void TypeInferrer::visitELitTrue(ELitTrue *p) { Return(new ETyped(p, new Bool())); }
-void TypeInferrer::visitEString(EString *p) { Return(new ETyped(p, new StringLit())); }
+void TypeInferrer::visitELitInt(ELitInt *p) { Return(new ETyped(p, new Int)); }
+void TypeInferrer::visitELitDoub(ELitDoub *p) { Return(new ETyped(p, new Doub)); }
+void TypeInferrer::visitELitFalse(ELitFalse *p) { Return(new ETyped(p, new Bool)); }
+void TypeInferrer::visitELitTrue(ELitTrue *p) { Return(new ETyped(p, new Bool)); }
+void TypeInferrer::visitEString(EString *p) { Return(new ETyped(p, new StringLit)); }
 
 void TypeInferrer::visitEVar(EVar *p) {
     TypeCode varType = env_.findVar(p->ident_, p->line_number, p->char_number);
-    Return(new ETyped(p, NewType(varType)));
+    Return(new ETyped(p, newType(varType)));
 }
 void TypeInferrer::visitArgument(Argument *p) { p->type_->accept(this); }
 
 void TypeInferrer::visitListArg(ListArg *p)
 {
-    for(auto it : *p)
+    for(Arg* it : *p)
         it->accept(this);
 }
 
 
 void TypeInferrer::visitListItem(ListItem *p)
 {
-    for(auto it : *p)
+    for(Item* it : *p)
         it->accept(this);
 }
 
@@ -351,7 +365,7 @@ void TypeInferrer::visitListItem(ListItem *p)
 // Minus (INT, DOUBLE)
 void TypeInferrer::visitEAdd(EAdd *p)
 {
-    auto addOpCode = OperatorVisitor::Get(p->addop_);
+    OpCode addOpCode = OpCoder::Get(p->addop_);
     Type* t = checkBinExp(p->expr_1, p->expr_2, toString(addOpCode),
                 {TypeCode::INT, TypeCode::DOUBLE});
     Return(new ETyped(p, t));
@@ -361,9 +375,9 @@ void TypeInferrer::visitEAdd(EAdd *p)
 // Mod        (INT)
 void TypeInferrer::visitEMul(EMul *p)
 {
-    auto mulOpCode = OperatorVisitor::Get(p->mulop_);
+    OpCode mulOpCode = OpCoder::Get(p->mulop_);
     Type* t = nullptr;
-    if(mulOpCode == OperatorCode::MOD)
+    if(mulOpCode == OpCode::MOD)
         t = checkBinExp(p->expr_1, p->expr_2, toString(mulOpCode),
                     {TypeCode::INT});
     else
@@ -375,28 +389,28 @@ void TypeInferrer::visitEMul(EMul *p)
 // OR (BOOLEAN)
 void TypeInferrer::visitEOr(EOr *p)
 {
-    checkBinExp(p->expr_1, p->expr_2, toString(OperatorCode::OR), {TypeCode::BOOLEAN});
+    checkBinExp(p->expr_1, p->expr_2, toString(OpCode::OR), {TypeCode::BOOLEAN});
     Return(new ETyped(p, new Bool));
 }
 
 // AND (BOOLEAN)
 void TypeInferrer::visitEAnd(EAnd *p)
 {
-    checkBinExp(p->expr_1, p->expr_2, toString(OperatorCode::AND), {TypeCode::BOOLEAN});
+    checkBinExp(p->expr_1, p->expr_2, toString(OpCode::AND), {TypeCode::BOOLEAN});
     Return(new ETyped(p, new Bool));
 }
 
 // NOT (BOOLEAN)
 void TypeInferrer::visitNot(Not *p)
 {
-    checkUnExp(p->expr_, toString(OperatorCode::NOT), {TypeCode::BOOLEAN});
+    checkUnExp(p->expr_, toString(OpCode::NOT), {TypeCode::BOOLEAN});
     Return(new ETyped(p, new Bool));
 }
 
 // NEG (INT, DOUBLE)
 void TypeInferrer::visitNeg(Neg *p)
 {
-    Type* t = checkUnExp(p->expr_, toString(OperatorCode::NEG), {TypeCode::INT, TypeCode::DOUBLE});
+    Type* t = checkUnExp(p->expr_, toString(OpCode::NEG), {TypeCode::INT, TypeCode::DOUBLE});
     Return(new ETyped(p, t));
 }
 
@@ -404,12 +418,12 @@ void TypeInferrer::visitNeg(Neg *p)
 // EQU, NE          (INT, DOUBLE, BOOLEAN)
 void TypeInferrer::visitERel(ERel *p)
 {
-    auto opc = OperatorVisitor::Get(p->relop_);
+    OpCode opc = OpCoder::Get(p->relop_);
     switch(opc) {
-        case OperatorCode::EQU:
+        case OpCode::EQU:
             checkBinExp(p->expr_1, p->expr_2, toString(opc),
                         {TypeCode::BOOLEAN, TypeCode::INT, TypeCode::DOUBLE}); break;
-        case OperatorCode::NE:
+        case OpCode::NE:
             checkBinExp(p->expr_1, p->expr_2, toString(opc),
                         {TypeCode::BOOLEAN, TypeCode::INT, TypeCode::DOUBLE}); break;
         default:
@@ -419,8 +433,7 @@ void TypeInferrer::visitERel(ERel *p)
     Return(new ETyped(p, new Bool));
 }
 
-void TypeInferrer::visitEApp(EApp *p)
-{
+void TypeInferrer::visitEApp(EApp *p) {
     FunctionType fnType = env_.findFn(p->ident_, p->line_number, p->char_number);
     int listLength = p->listexpr_->size(); // Nr of args provided
     int argLength  =  fnType.args.size();  // Actual nr of args
@@ -443,34 +456,31 @@ void TypeInferrer::visitEApp(EApp *p)
             throw TypeError("In call to fn " + p->ident_ + ", expected arg " + toString(*itArg) +
                             ", but got " + toString(exprListType), p->line_number, p->char_number);
         }
-        SWAP(*itList, exprListTyped);
+        swap(*itList, exprListTyped);
     }
 	
-    Return(new ETyped(p, NewType(fnType.returnType)));
+    Return(new ETyped(p, newType(fnType.ret)));
 }
 
 /********************   Env class    ********************/
 
 void Env::enterScope() { scopes_.push_front(ScopeType()); }
 void Env::exitScope() { scopes_.pop_front(); }
-void Env::enterFn(const std::string& fnName)
-{
+void Env::enterFn(const std::string& fnName) {
     currentFn_ = { fnName, findFn(fnName, 1, 1) };
 }
-SignatureType& Env::getCurrentFunction() { return currentFn_; }
+Signature& Env::getCurrentFunction() { return currentFn_; }
 
 // In the future: could enter scope in constructor to allow global vars
 
-void Env::addSignature(const std::string& fnName, const FunctionType& t)
-{
+void Env::addSignature(const std::string& fnName, const FunctionType& t) {
     bool ok = signatures_.insert({fnName, t}).second; // succeeds => second = true
     if(!ok)
         throw TypeError("Duplicate function with name: " + fnName);
 }
 
 // Called when it's used in an expression, if it doesn't exist, throw
-TypeCode Env::findVar(const std::string& var, int lineNr, int charNr)
-{
+TypeCode Env::findVar(const std::string& var, int lineNr, int charNr) {
     for(auto scope : scopes_) {
         auto search = scope.find(var); // O(1)
         if(search != scope.end())
@@ -479,16 +489,15 @@ TypeCode Env::findVar(const std::string& var, int lineNr, int charNr)
     throw TypeError("Variable '" + var + "' not declared in this context", lineNr, charNr);
 }
 
-FunctionType& Env::findFn(const std::string& fn, int lineNr, int charNr)
-{
+// TODO: Make line char nr opt.
+FunctionType& Env::findFn(const std::string& fn, int lineNr, int charNr) {
     auto search = signatures_.find(fn);
     if(search != signatures_.end())
         return search->second; // second: FunctionType
     throw TypeError("Function '" + fn + "' does not exist", lineNr, charNr);
 }
 
-void Env::addVar(const std::string& name, TypeCode t)
-{
+void Env::addVar(const std::string& name, TypeCode t) {
     ScopeType& currentScope = scopes_.front();
     bool ok = currentScope.insert({ name, t }).second; // succeeds => second = true
     if(!ok)
@@ -508,29 +517,28 @@ const std::string toString(TypeCode t) {
     }
 }
 
-const std::string toString(OperatorCode c) {
+const std::string toString(OpCode c) {
     switch (c) {
-        case OperatorCode::LTH:     return "operator <";
-        case OperatorCode::LE:      return "operator <=";
-        case OperatorCode::GTH:     return "operator >";
-        case OperatorCode::GE:      return "operator >=";
-        case OperatorCode::EQU:     return "operator ==";
-        case OperatorCode::NE:      return "operator !=";
-        case OperatorCode::PLUS:    return "operator +";
-        case OperatorCode::MINUS:   return "operator -";
-        case OperatorCode::TIMES:   return "operator *";
-        case OperatorCode::DIV:     return "operator /";
-        case OperatorCode::MOD:     return "operator %";
-        case OperatorCode::AND:     return "operator &&";
-        case OperatorCode::OR:      return "operator ||";
-        case OperatorCode::NOT:     return "operator !";
-        case OperatorCode::NEG:     return "operator ~";
+        case OpCode::LTH:     return "operator <";
+        case OpCode::LE:      return "operator <=";
+        case OpCode::GTH:     return "operator >";
+        case OpCode::GE:      return "operator >=";
+        case OpCode::EQU:     return "operator ==";
+        case OpCode::NE:      return "operator !=";
+        case OpCode::PLUS:    return "operator +";
+        case OpCode::MINUS:   return "operator -";
+        case OpCode::TIMES:   return "operator *";
+        case OpCode::DIV:     return "operator /";
+        case OpCode::MOD:     return "operator %";
+        case OpCode::AND:     return "operator &&";
+        case OpCode::OR:      return "operator ||";
+        case OpCode::NOT:     return "operator !";
+        case OpCode::NEG:     return "operator ~";
         default:                    return "errorCode";
     }
 }
 
-Type* NewType(TypeCode t)
-{
+Type* newType(TypeCode t) {
     switch (t) {
         case TypeCode::INT:      return new Int;
         case TypeCode::DOUBLE:   return new Doub;

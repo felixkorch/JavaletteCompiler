@@ -16,7 +16,7 @@ enum class TypeCode {
     INT, DOUBLE, BOOLEAN, VOID, STRING, ERROR
 };
 
-enum class OperatorCode {
+enum class OpCode {
     LTH , LE, GTH, GE, EQU, NE, // RelOP
     PLUS, MINUS,                // AddOP
     TIMES, DIV, MOD,            // MulOP
@@ -24,22 +24,26 @@ enum class OperatorCode {
 };
 
 const std::string toString(TypeCode t);
-const std::string toString(OperatorCode c);
-Type* NewType(TypeCode t);
+const std::string toString(OpCode c);
+Type* newType(TypeCode t);
 
 struct FunctionType {
     std::list<TypeCode> args;
-    TypeCode returnType;
+    TypeCode ret;
+};
+
+struct Signature {
+    std::string name;
+    FunctionType type;
 };
 
 using ScopeType = std::unordered_map<std::string, TypeCode>; // Map of (Var -> Type)
-using SignatureType = std::pair<std::string, FunctionType>;  // Pair   (name, FunctionType)
 
 class Env {
     // Defines the environment of the program
     std::list<ScopeType> scopes_;
     std::unordered_map<std::string, FunctionType> signatures_;
-    SignatureType currentFn_;
+    Signature currentFn_;
 
     /* Not related to the semantics of the type-checker, just for passing around a printing object. */
     std::unique_ptr<PrintAbsyn> printer_;
@@ -53,7 +57,7 @@ public:
     void enterScope();
     void exitScope();
     void enterFn(const std::string& fnName);
-    SignatureType& getCurrentFunction();
+    Signature& getCurrentFunction();
 
     // In the future: could enter scope in constructor to allow global vars
 
@@ -72,22 +76,23 @@ public:
 
 };
 
-class OperatorVisitor : public BaseVisitor, public ValueGetter<OperatorCode, OperatorVisitor, Env> {
+//  Returns the OpCode for an Operation
+class OpCoder : public BaseVisitor, public ValueGetter<OpCode, OpCoder, Env> {
 public:
-    void visitLE  (LE  *p) override { Return(OperatorCode::LE);  }
-    void visitLTH (LTH *p) override { Return(OperatorCode::LTH); }
-    void visitGE  (GE  *p) override { Return(OperatorCode::GE);  }
-    void visitEQU (EQU *p) override { Return(OperatorCode::EQU); }
-    void visitNE  (NE  *p) override { Return(OperatorCode::NE);  }
-    void visitGTH (GTH *p) override { Return(OperatorCode::GTH); }
-    void visitPlus (Plus *p) override { Return(OperatorCode::PLUS); }
-    void visitMinus (Minus *p) override { Return(OperatorCode::MINUS); }
-    void visitTimes (Times *p) override { Return(OperatorCode::TIMES); }
-    void visitDiv (Div *p) override { Return(OperatorCode::DIV); }
-    void visitMod (Mod *p) override { Return(OperatorCode::MOD); }
+    void visitLE  (LE  *p) override { Return(OpCode::LE);  }
+    void visitLTH (LTH *p) override { Return(OpCode::LTH); }
+    void visitGE  (GE  *p) override { Return(OpCode::GE);  }
+    void visitEQU (EQU *p) override { Return(OpCode::EQU); }
+    void visitNE  (NE  *p) override { Return(OpCode::NE);  }
+    void visitGTH (GTH *p) override { Return(OpCode::GTH); }
+    void visitPlus (Plus *p) override { Return(OpCode::PLUS); }
+    void visitMinus (Minus *p) override { Return(OpCode::MINUS); }
+    void visitTimes (Times *p) override { Return(OpCode::TIMES); }
+    void visitDiv (Div *p) override { Return(OpCode::DIV); }
+    void visitMod (Mod *p) override { Return(OpCode::MOD); }
 };
 
-//  Returns the typecode for a Type
+//  Returns the TypeCode for a Type
 class TypeCoder : public BaseVisitor, public ValueGetter<TypeCode, TypeCoder, Env> {
 public:
     void visitInt(Int *p)   override { Return(TypeCode::INT); }
@@ -144,7 +149,7 @@ public:
 // Checks a sequence of statements for the same visitor-object
 class StatementChecker : public BaseVisitor {
     Env& env_;
-    SignatureType currentFn_;
+    Signature currentFn_;
 public:
     explicit StatementChecker(Env& env): env_(env) {}
 
@@ -165,11 +170,11 @@ public:
 
 };
 
-// Checks that the function returns a value (for non-void)
+// Checks that the function returns a value (for non-void). True if OK.
 class ReturnChecker : public BaseVisitor, public ValueGetter<bool, ReturnChecker, Env> {
     Env& env_;
 public:
-    explicit ReturnChecker(Env& env): env_(env) { Return(false); }
+    explicit ReturnChecker(Env& env): env_(env) { v_ = false ; }
 
     void visitBStmt(BStmt *p) override;
     void visitDecr(Decr *p) override;

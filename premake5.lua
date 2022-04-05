@@ -1,11 +1,13 @@
 function preExecuteLinux()
-    os.execute("bnfc -m -l -p bnfc --latex --cpp -o bnfc src/Javalette.cf && cp -f src/Javalette.y bnfc/")
+    os.execute("bnfc -m -l -p bnfc --cpp -o bnfc src/Javalette.cf && cp -f src/Javalette.y bnfc/")
+    os.execute("bnfc --latex -o bnfc src/Javalette.cf")
     os.execute("flex -Pjavalette_ -o bnfc/Lexer.C bnfc/Javalette.l")
     os.execute("bison -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C")
 end
 
 function preExecuteWindows()
-    os.execute("bnfc.exe -m -l -p bnfc --latex --cpp -o bnfc src/Javalette.cf")
+    os.execute("bnfc.exe -m -l -p bnfc --cpp -o bnfc src/Javalette.cf")
+    os.execute("bnfc.exe --latex -o bnfc src/Javalette.cf")
     os.execute("xcopy /y src\\Javalette.y bnfc")
     os.execute(".\\flexbison\\win_flex.exe -Pjavalette_ -o bnfc/Lexer.C bnfc/Javalette.l")
     os.execute(".\\flexbison\\win_bison.exe -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C")

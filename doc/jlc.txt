@@ -1,3 +1,10 @@
+Javalette compiler
+-------------------------------------------------------------
+Description of the Javalette language is depicted in the included "Javalette.tex" in ./doc
+Implemented features so far:
+* Parsing
+* Type-checking
+
 Prerequisites:
 -------------------------------------------------------------
 - bison (>=3.8.2)
@@ -5,9 +12,8 @@ Prerequisites:
 - bnfc (tested with v2.9.4)
 - g++/clang++ with C++17 support
 
-
 Build instructions:
-Produces (in root): *jlc binary* (the compiler)
+Produces (in root): 'jlc' (the compiler)
 ------------------------------------------------------------
 > make
 
@@ -16,11 +22,11 @@ and to remove build artefacts,
 > make clean
 
 Usage (from root):
----------------------------------------------------------------------
+-------------------------------------------------------------
 > ./jlc <input-file.jl>
 
-* If the input file is invalid, the program will exit with code 1.
-* If the input file is empty, the program will start reading from std in.
+* If the input arg is invalid, the program will exit with code 1.
+* If the input arg is empty, the program will start reading from std in.
 * A parser-error will print: "ERROR: Parse error on line x"
 * The compiler will then attempt to run the typechecking module, which on failed attempt will print
 the corresponding error to std err prepended with 'ERROR:' On success, "OK" will be printed to std err.

@@ -22,7 +22,7 @@ MAKEFILE_LIST := $(abspath $(lastword $(MAKEFILE_LIST)))
 MAKEFILE_DIR := $(dir $(MAKEFILE_LIST))
 
 INCLUDES := -I $(MAKEFILE_DIR) $(MAKEFILE_DIR)/src
-FLAGS := -c -std=c++17 -Wall $(INCLUDES)
+FLAGS := -c -O3 -std=c++17 -Wall $(INCLUDES)
 CC:= g++
 
 GRAMMAR_FILE := src/Javalette.cf

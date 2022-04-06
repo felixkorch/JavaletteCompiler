@@ -4,7 +4,7 @@
 #include <iostream>
 #include <sstream>
 
-namespace typechecker {
+namespace jlc::typechecker {
 
 class TypeError : public std::exception {
     std::string msg_;
@@ -25,4 +25,4 @@ class TypeError : public std::exception {
     const char* what() const throw() { return msg_.c_str(); }
 };
 
-} // namespace typechecker
+} // namespace jlc::typechecker

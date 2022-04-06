@@ -8,7 +8,7 @@
 #include <list>
 #include <memory>
 
-namespace typechecker {
+namespace jlc::typechecker {
 
 using namespace bnfc;
 
@@ -103,7 +103,8 @@ public:
     void visitArgument(Argument *p) override { p->type_->accept(this); }
 };
 
-// Returns an annotated version of the expression and checks the compatability between operands and supported types for operators.
+// Returns an annotated version of the expression and
+// checks the compatability between operands and supported types for operators.
 class TypeInferrer : public BaseVisitor, public ValueGetter<ETyped*, TypeInferrer, Env> {
     Env& env_;
 
@@ -133,9 +134,11 @@ public:
     void visitEString(EString *p) override;
 };
 
+// Handles the type-checking for declarations, needed because the "children"
+// i.e. Init/NoInit, needs access to the type variable
 class DeclHandler : public BaseVisitor {
     Env& env_;
-    TypeCode t; // Type of declaration of variable
+    TypeCode t; // Holds the type of the declaration
 public:
     explicit DeclHandler(Env& env): env_(env), t(TypeCode::ERROR) {}
 
@@ -146,7 +149,7 @@ public:
 
 };
 
-// Checks a sequence of statements for the same visitor-object
+// Checks a sequence of statements
 class StatementChecker : public BaseVisitor {
     Env& env_;
     Signature currentFn_;

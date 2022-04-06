@@ -1,7 +1,7 @@
 #pragma once
 #include "bnfc/Absyn.H"
 
-namespace typechecker
+namespace jlc::typechecker
 {
     using namespace bnfc;
 

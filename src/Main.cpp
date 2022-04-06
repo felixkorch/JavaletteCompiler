@@ -29,8 +29,8 @@ int main(int argc, char** argv) {
 
     if (parse_tree) {
         try {
-            typechecker::run(parse_tree);
-        } catch (typechecker::TypeError& e) {
+            jlc::typechecker::run(parse_tree);
+        } catch (jlc::typechecker::TypeError& e) {
             std::cerr << e.what() << "\n";
             return 1;
         } catch (std::exception& e) {

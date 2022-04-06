@@ -1,7 +1,7 @@
 #include "TypeChecker.h"
 #include "TypeError.h"
 #include "Util.h"
-namespace typechecker {
+namespace jlc::typechecker {
 
 /********************   Entrypoint for typechecking   ********************/
 Prog* run(Prog* p) {
@@ -440,7 +440,7 @@ void Env::addSignature(const std::string& fnName, const FunctionType& t) {
 // Called when it's used in an expression, if it doesn't exist, throw
 TypeCode Env::findVar(const std::string& var, int lineNr, int charNr) {
     for (auto scope : scopes_) {
-        if (auto type = findIn(var, scope))
+        if (auto type = findInMap(var, scope))
             return type->get();
     }
     throw TypeError("Variable '" + var + "' not declared in this context", lineNr,
@@ -448,7 +448,7 @@ TypeCode Env::findVar(const std::string& var, int lineNr, int charNr) {
 }
 
 FunctionType& Env::findFn(const std::string& fn, int lineNr, int charNr) {
-    if (auto fnType = findIn(fn, signatures_))
+    if (auto fnType = findInMap(fn, signatures_))
         return fnType->get();
     throw TypeError("Function '" + fn + "' does not exist", lineNr, charNr);
 }
@@ -504,4 +504,4 @@ Type* newType(TypeCode t) {
     }
 }
 
-} // namespace typechecker
+} // namespace jlc::typechecker

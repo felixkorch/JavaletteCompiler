@@ -17,7 +17,7 @@ do { \
 
 
 
-namespace typechecker
+namespace jlc::typechecker
 {
 void BaseVisitor::visitProg(Prog *t) {} //abstract class
 void BaseVisitor::visitTopDef(TopDef *t) {} //abstract class

@@ -14,7 +14,6 @@ bin-int
 .codelite
 .build-debug
 compile_flags.txt
-*.txt
 tags
 *.make
 install/

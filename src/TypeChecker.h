@@ -23,8 +23,8 @@ enum class OpCode {
     AND, OR, NOT, NEG           // Other
 };
 
-const std::string toString(TypeCode t);
-const std::string toString(OpCode c);
+std::string toString(TypeCode t);
+std::string toString(OpCode c);
 Type* newType(TypeCode t);
 
 struct FunctionType {
@@ -37,11 +37,11 @@ struct Signature {
     FunctionType type;
 };
 
-using ScopeType = std::unordered_map<std::string, TypeCode>; // Map of (Var -> Type)
+using Scope = std::unordered_map<std::string, TypeCode>; // Map of (Var -> Type)
 
 class Env {
     // Defines the environment of the program
-    std::list<ScopeType> scopes_;
+    std::list<Scope> scopes_;
     std::unordered_map<std::string, FunctionType> signatures_;
     Signature currentFn_;
 
@@ -72,7 +72,7 @@ public:
     void addVar(const std::string& name, TypeCode t);
 
     /* Not related to the semantics of the type-checker, just for printing */
-    inline const std::string Print(Visitable* v) { return printer_->print(v); }
+    inline std::string Print(Visitable* v) { return printer_->print(v); }
 
 };
 

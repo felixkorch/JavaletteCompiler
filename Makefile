@@ -11,18 +11,18 @@ COMMON_SRC := $(filter-out $(MAIN_SRC), $(wildcard $(SRC_DIR)/*.cpp))
 HEADERS := $(wildcard $(SRC_DIR)/*.h)
 
 GEN_SRC := $(addprefix $(GEN_DIR)/, Absyn.C Absyn.H Buffer.C Buffer.H Javalette.l Javalette.y\
-Parser.H ParserError.H Printer.H Printer.C Skeleton.H Skeleton.C Test.C)
+Parser.H ParserError.H Printer.H Printer.C Test.C)
 GEN_HEADERS := $(filter $(GEN_DIR)/%.H, $(GEN_SRC))
 
-OBJ := $(patsubst $(SRC_DIR)/%.cpp, $(OBJ_DIR)/%.o, $(COMMON_SRC))       # COMMON_SRC object-files
-OBJ += $(addprefix $(OBJ_DIR)/, Absyn.o Buffer.o Lexer.o Parser.o Printer.o Skeleton.o) # BNFC object-files
+OBJ := $(patsubst $(SRC_DIR)/%.cpp, $(OBJ_DIR)/%.o, $(COMMON_SRC))           # COMMON_SRC object-files
+OBJ += $(addprefix $(OBJ_DIR)/, Absyn.o Buffer.o Lexer.o Parser.o Printer.o) # BNFC object-files
 MAIN_OBJ = $(OBJ_DIR)/$(MAIN_FILE).o
 
 MAKEFILE_LIST := $(abspath $(lastword $(MAKEFILE_LIST)))
 MAKEFILE_DIR := $(dir $(MAKEFILE_LIST))
 
 INCLUDES := -I $(MAKEFILE_DIR) $(MAKEFILE_DIR)/src
-FLAGS := -c -std=c++11 -Wall $(INCLUDES)
+FLAGS := -c -std=c++17 -Wall $(INCLUDES)
 CC:= g++
 
 GRAMMAR_FILE := src/Javalette.cf
@@ -93,6 +93,3 @@ $(OBJ_DIR)/Parser.o : $(GEN_DIR)/Parser.C $(GEN_DIR)/Absyn.H $(GEN_DIR)/Bison.H
 
 $(OBJ_DIR)/Printer.o : $(GEN_DIR)/Printer.C $(GEN_DIR)/Printer.H $(GEN_DIR)/Absyn.H 
 	$(CC) $(FLAGS_BNFC) -c $(GEN_DIR)/Printer.C -o $@
-
-$(OBJ_DIR)/Skeleton.o : $(GEN_DIR)/Skeleton.C $(GEN_DIR)/Skeleton.H $(GEN_DIR)/Absyn.H
-	$(CC) $(FLAGS_BNFC) -c $(GEN_DIR)/Skeleton.C -o $@

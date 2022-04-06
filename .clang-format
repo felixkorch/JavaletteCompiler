@@ -1,0 +1,11 @@
+Language : Cpp
+BasedOnStyle : LLVM
+IndentWidth : 4
+AllowShortFunctionsOnASingleLine : All
+AllowShortIfStatementsOnASingleLine : Never
+AllowShortLoopsOnASingleLine: false
+DerivePointerAlignment: false
+PointerAlignment: Left
+ColumnLimit: 90
+AllowShortCaseLabelsOnASingleLine: True
+AllowShortEnumsOnASingleLine: True

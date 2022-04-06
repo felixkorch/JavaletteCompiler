@@ -3,10 +3,11 @@ Prerequisites:
 - bison (>=3.8.2)
 - flex (>=2.6.4)
 - bnfc (tested with v2.9.4)
-- gcc with C++11 support
+- g++/clang++ with C++17 support
 
 
 Build instructions:
+Produces (in root): *jlc binary* (the compiler)
 ------------------------------------------------------------
 > make
 
@@ -14,20 +15,22 @@ and to remove build artefacts,
 
 > make clean
 
-
-
 Usage (from root):
 ---------------------------------------------------------------------
 > ./jlc <input-file.jl>
 
-* If the input file is invalid or empty, the program will exit with code 1.
-* A parser-error will print: "ERROR\n Parse error on line x"
+* If the input file is invalid, the program will exit with code 1.
+* If the input file is empty, the program will start reading from std in.
+* A parser-error will print: "ERROR: Parse error on line x"
 * The compiler will then attempt to run the typechecking module, which on failed attempt will print
-the corresponding error to std err prepended with ERROR\n. On success, "OK" will be printed to std err.
+the corresponding error to std err prepended with 'ERROR:' On success, "OK" will be printed to std err.
 
 
-Currently working on:
+Parsing conflicts:
 ------------------------------------------------------------------------
-- Check that the function always returns (not just that it exists).
-- Checking types for function calls properly.
-- Other things that makes certain tests fail.
+There is just 1 shift/reduce conflict, which is the standard dangling 'else', which is present in
+other languages like C/Java. The bison parser-generator confirms this and reports it in the logs.
+Bison as other parser-generators, will choose the shift action which in practice means that the 'else'-statement will
+be attached to the inner 'if' like so:
+
+if (expr) { if (expr) stmt ; else stmt ;}

@@ -20,6 +20,7 @@ tags
 install/
 wip/
 null.d
+cmake-build-debug
 
 ## Mac specific
 *.xcodeproj

@@ -1,5 +1,6 @@
 set(SANDBOX_FILES
-    Box1
+    PrintTypedTree
+    TryStages
 )
 
 set(SANDBOX_OUTPUT_DIR ${CMAKE_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/sandbox)

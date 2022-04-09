@@ -28,13 +28,31 @@ set(jlc-lib_SOURCE ${bnfc_SOURCE}
     src/TypeChecker.cpp
     src/TypeChecker.h
     src/TypeError.h
+    src/CodeGen.h
+    src/CodeGen.cpp
     src/Util.h
-)
+    src/Stage.h)
+
+find_package(LLVM CONFIG REQUIRED)
+if(VERBOSE)
+    message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+    message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+    message(STATUS "Include dirs in: ${LLVM_INCLUDE_DIRS}")
+
+    foreach(lib ${LLVM_AVAILABLE_LIBS})
+        message(STATUS ${lib})
+    endforeach()
+endif()
 
 add_library(jlc-lib ${jlc-lib_SOURCE})
 
+add_definitions(${LLVM_DEFINITIONS})
+target_link_libraries(jlc-lib LLVM)
+
+
 target_include_directories(jlc-lib
 	PUBLIC
+    ${LLVM_INCLUDE_DIRS}
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
 )
 

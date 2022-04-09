@@ -4,9 +4,7 @@ GEN_DIR = bnfc
 BIN_DIR = .
 COMPILER_NAME = jlc
 
-MAIN_FILE = Main
-
-MAIN_SRC = $(SRC_DIR)/$(MAIN_FILE).cpp
+MAIN_SRC = $(SRC_DIR)/Main.cpp
 COMMON_SRC := $(filter-out $(MAIN_SRC), $(wildcard $(SRC_DIR)/*.cpp))
 HEADERS := $(wildcard $(SRC_DIR)/*.h)
 
@@ -21,7 +19,12 @@ MAIN_OBJ = $(OBJ_DIR)/$(MAIN_FILE).o
 MAKEFILE_LIST := $(abspath $(lastword $(MAKEFILE_LIST)))
 MAKEFILE_DIR := $(dir $(MAKEFILE_LIST))
 
+LLVM_CXX_FLAGS=$(shell llvm-config --cxxflags)
+LLVM_LD_FLAGS=$(shell llvm-config --ldflags)
+LLVM_LIBS=$(shell llvm-config --libs)
+
 INCLUDES := -I $(MAKEFILE_DIR) $(MAKEFILE_DIR)/src
+LINKS := $(LLVM_CXX_FLAGS) $(LLVM_LD_FLAGS) $(LLVM_LIBS)
 FLAGS := -c -O3 -std=c++17 -Wall $(INCLUDES)
 CC:= g++
 
@@ -47,7 +50,7 @@ clean:
 	rm -rf $(GEN_DIR) build
 
 $(COMPILER_NAME): $(OBJ) $(MAIN_OBJ) | $(BIN_DIR)
-	$(CC) -o $(BIN_DIR)/$@ $^
+	$(CC) -o $(BIN_DIR)/$@ $^ $(LINKS)
 
 $(GEN_SRC)&:
 	$(BNFC_CMD)

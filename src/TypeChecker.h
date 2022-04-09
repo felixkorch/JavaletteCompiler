@@ -77,7 +77,7 @@ public:
 };
 
 //  Returns the OpCode for an Operation
-class OpCoder : public BaseVisitor, public ValueGetter<OpCode, OpCoder, Env> {
+class OpCoder : public BaseVisitor, public ValueGetter<OpCode, OpCoder> {
 public:
     void visitLE  (LE  *p) override { Return(OpCode::LE);  }
     void visitLTH (LTH *p) override { Return(OpCode::LTH); }
@@ -93,7 +93,7 @@ public:
 };
 
 //  Returns the TypeCode for a Type
-class TypeCoder : public BaseVisitor, public ValueGetter<TypeCode, TypeCoder, Env> {
+class TypeCoder : public BaseVisitor, public ValueGetter<TypeCode, TypeCoder> {
 public:
     void visitInt(Int *p)   override { Return(TypeCode::INT); }
     void visitDoub(Doub *p) override { Return(TypeCode::DOUBLE); }

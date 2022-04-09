@@ -20,19 +20,13 @@ class Env {
     Env() : scopes_(), signatures_() {}
 
     // To separate local variables
-    void enterScope() {
-        scopes_.push_front(Scope());
-        std::cerr << "Enter Scope" << std::endl;
-    }
-    void exitScope() {
-        scopes_.pop_front();
-        std::cerr << "Exit Scope" << std::endl;
-    }
+    void enterScope() { scopes_.push_front(Scope()); }
+    void exitScope() { scopes_.pop_front(); }
 
     // Called in the first pass
     void addSignature(const std::string& fnName, llvm::Function* fn) {
         if (auto [_, success] = signatures_.insert({fnName, fn}); !success)
-            std::cerr << "Something went wrong." << std::endl;
+            std::cerr << "[CodeGen] Could not add signature." << std::endl;
     }
 
     llvm::Value* findVar(const std::string& ident) {
@@ -52,7 +46,7 @@ class Env {
     void addVar(const std::string& name, llvm::Value* v) {
         Scope& currentScope = scopes_.front();
         if (auto [_, success] = currentScope.insert({name, v}); !success)
-            std::cerr << "Something went wrong." << std::endl;
+            std::cerr << "[CodeGen] Could not add var." << std::endl;
     }
 
     void updateVar(const std::string& ident, llvm::Value* v) {
@@ -88,7 +82,6 @@ class Codegen {
         declareExternFunction("printDouble", voidTy, {doubleTy});
         declareExternFunction("readDouble", doubleTy, {});
         declareExternFunction("readInt", int32, {});
-
     }
 
     // Entry point of codegen!
@@ -101,7 +94,8 @@ class Codegen {
   private:
     class IntermediateBuilder : public BaseVisitor {
       public:
-        IntermediateBuilder(Codegen& parent) : parent_(parent) {}
+        IntermediateBuilder(Codegen& parent)
+            : parent_(parent), currentFn_(nullptr), blockLabelNr(0) {}
 
         void visitProgram(Program* p) override {
             FunctionAdder functionAdder(parent_);
@@ -113,6 +107,7 @@ class Codegen {
 
         void visitFnDef(FnDef* p) override {
             llvm::Function* fn = parent_.env_->findFn(p->ident_);
+            currentFn_ = fn;
             llvm::BasicBlock* bb =
                 llvm::BasicBlock::Create(*parent_.context_, p->ident_ + "_entry", fn);
             parent_.builder_->SetInsertPoint(bb);
@@ -165,8 +160,26 @@ class Codegen {
             // parent_.builder_->CreateStore(exp, var);
         }
 
+        void visitCond(Cond* p) override {
+            llvm::Value* cond = ExpHandler::Get(p->expr_, parent_);
+            llvm::BasicBlock* trueBlock = genBasicBlock();
+            llvm::BasicBlock* contBlock = genBasicBlock();
+            parent_.builder_->CreateCondBr(cond, trueBlock, contBlock);
+            parent_.builder_->SetInsertPoint(trueBlock);
+            p->stmt_->accept(this);
+            parent_.builder_->CreateBr(contBlock);
+            parent_.builder_->SetInsertPoint(contBlock);
+        }
+
       private:
+        inline llvm::BasicBlock* genBasicBlock() {
+            return llvm::BasicBlock::Create(
+                *parent_.context_, "label_" + std::to_string(blockLabelNr++), currentFn_);
+        }
+
         Codegen& parent_;
+        llvm::Function* currentFn_;
+        int blockLabelNr;
     };
 
     class ExpHandler : public BaseVisitor,
@@ -183,6 +196,10 @@ class Codegen {
         }
         void visitELitInt(ELitInt* p) override {
             Return(llvm::ConstantInt::get(parent_.int32, p->integer_));
+        }
+
+        void visitELitTrue(ELitTrue* p) override {
+            Return(llvm::ConstantInt::get(parent_.int1, 1));
         }
 
         void visitEString(EString* p) override {
@@ -210,6 +227,47 @@ class Codegen {
             Return(var);
             // TODO: Load here and return then.  Alloca vs registers?
         }
+
+        void visitERel(ERel* p) override {
+            llvm::Value* exp1 = ExpHandler::Get(p->expr_1, parent_);
+            llvm::Value* exp2 = ExpHandler::Get(p->expr_2, parent_);
+            Return(RelOpBuilder::Get(p->relop_, parent_, exp1, exp2));
+        }
+
+        // TODO: Is there a point to variadic templates. Could just call RelOpBuilder with
+        //       ERel and set the local e1, e2 there. Or might just do a switch on the
+        //       diff types
+        class RelOpBuilder : public BaseVisitor,
+                             public ValueGetter<llvm::Value*, RelOpBuilder, Codegen,
+                                                llvm::Value*, llvm::Value*> {
+          public:
+            RelOpBuilder(Codegen& parent, llvm::Value* e1, llvm::Value* e2)
+                : parent_(parent), e1_(e1), e2_(e2) {}
+
+            void visitEQU(EQU* p) override {
+                if (e1_->getType() == parent_.doubleTy)
+                    Return(parent_.builder_->CreateFCmpOEQ(e1_, e2_));
+                else
+                    Return(parent_.builder_->CreateICmpEQ(e1_, e2_));
+            }
+            void visitNE(NE* p) override {
+                if (e1_->getType() == parent_.doubleTy)
+                    Return(parent_.builder_->CreateFCmpONE(e1_, e2_));
+                else
+                    Return(parent_.builder_->CreateICmpNE(e1_, e2_));
+            }
+            void visitLTH(LTH* p) override {
+                if (e1_->getType() == parent_.doubleTy)
+                    Return(parent_.builder_->CreateFCmpOLT(e1_, e2_));
+                else
+                    Return(parent_.builder_->CreateICmpSLT(e1_, e2_));
+            }
+
+          private:
+            Codegen& parent_;
+            llvm::Value* e1_;
+            llvm::Value* e2_;
+        };
 
       private:
         Codegen& parent_;

@@ -42,6 +42,10 @@ if(VERBOSE)
     foreach(lib ${LLVM_AVAILABLE_LIBS})
         message(STATUS ${lib})
     endforeach()
+
+    foreach(def ${LLVM_DEFINITIONS})
+        message(STATUS ${def})
+    endforeach()
 endif()
 
 add_library(jlc-lib ${jlc-lib_SOURCE})

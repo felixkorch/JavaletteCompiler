@@ -25,17 +25,17 @@ int main(int argc, char ** argv)
         std::cerr << "ERROR: Parse error on line " << e.getLine() << "\n";
     }
     
-    bnfc::PrintAbsyn* printer = new bnfc::PrintAbsyn;
+    auto printer = std::make_unique<bnfc::PrintAbsyn>();
 
     if (parse_tree) {
         try {
             // Print program before typechecking
             std::cout << printer->print(parse_tree) << std::endl;
-            auto annotated_tree = typechecker::run(parse_tree);
+            auto annotated_tree = jlc::typechecker::run(parse_tree);
             // Print program after typechecking
             std::cout << printer->print(annotated_tree) << std::endl;
             
-        }catch(typechecker::TypeError &e) {
+        }catch(jlc::typechecker::TypeError &e) {
             std::cerr << e.what() << "\n";
             return 1;
         }catch(std::exception &e) {

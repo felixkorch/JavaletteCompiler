@@ -144,7 +144,6 @@ void StatementChecker::visitDecl(Decl* p) {
 }
 
 void StatementChecker::visitListStmt(ListStmt* p) {
-    // TODO: Might move this loop to function-level
     // Entrypoint for checking a sequence of statements
     currentFn_ = env_.getCurrentFunction();
     for (Stmt* it : *p)
@@ -317,12 +316,6 @@ void TypeInferrer::visitEString(EString* p) { Return(new ETyped(p, new StringLit
 void TypeInferrer::visitEVar(EVar* p) {
     TypeCode varType = env_.findVar(p->ident_, p->line_number, p->char_number);
     Return(new ETyped(p, newType(varType)));
-}
-void TypeInferrer::visitArgument(Argument* p) { p->type_->accept(this); }
-
-void TypeInferrer::visitListArg(ListArg* p) {
-    for (Arg* it : *p)
-        it->accept(this);
 }
 
 void TypeInferrer::visitListItem(ListItem* p) {

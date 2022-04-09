@@ -120,8 +120,6 @@ public:
     void visitELitFalse(ELitFalse *p) override;
     void visitELitTrue(ELitTrue *p) override;
     void visitEVar(EVar *p) override;
-    void visitArgument(Argument *p) override;
-    void visitListArg(ListArg *p) override;
     void visitListItem(ListItem *p) override;
     void visitEAdd(EAdd *p) override;
     void visitEMul(EMul *p) override;

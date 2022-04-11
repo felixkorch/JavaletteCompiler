@@ -77,7 +77,7 @@ public:
 };
 
 //  Returns the OpCode for an Operation
-class OpCoder : public BaseVisitor, public ValueGetter<OpCode, OpCoder> {
+class OpCoder : public ValueVisitor<OpCoder, OpCode> {
 public:
     void visitLE  (LE  *p) override { Return(OpCode::LE);  }
     void visitLTH (LTH *p) override { Return(OpCode::LTH); }
@@ -93,7 +93,7 @@ public:
 };
 
 //  Returns the TypeCode for a Type
-class TypeCoder : public BaseVisitor, public ValueGetter<TypeCode, TypeCoder> {
+class TypeCoder : public ValueVisitor<TypeCoder, TypeCode> {
 public:
     void visitInt(Int *p)   override { Return(TypeCode::INT); }
     void visitDoub(Doub *p) override { Return(TypeCode::DOUBLE); }
@@ -105,7 +105,7 @@ public:
 
 // Returns an annotated version of the expression and
 // checks the compatability between operands and supported types for operators.
-class TypeInferrer : public BaseVisitor, public ValueGetter<ETyped*, TypeInferrer, Env> {
+class TypeInferrer : public ValueVisitor<TypeInferrer, ETyped*, Env> {
     Env& env_;
 
     static bool typeIn(TypeCode t, std::initializer_list<TypeCode> list);
@@ -113,7 +113,7 @@ class TypeInferrer : public BaseVisitor, public ValueGetter<ETyped*, TypeInferre
     Type* checkUnExp(Expr* e, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
 
 public:
-    explicit TypeInferrer(Env& env): ValueGetter(), env_(env) {}
+    explicit TypeInferrer(Env& env): env_(env) {}
 
     void visitELitInt(ELitInt *p) override;
     void visitELitDoub(ELitDoub *p) override;
@@ -134,7 +134,7 @@ public:
 
 // Handles the type-checking for declarations, needed because the "children"
 // i.e. Init/NoInit, needs access to the type variable
-class DeclHandler : public BaseVisitor {
+class DeclHandler : public VoidVisitor<DeclHandler, Env> {
     Env& env_;
     TypeCode t; // Holds the type of the declaration
 public:
@@ -148,7 +148,7 @@ public:
 };
 
 // Checks a sequence of statements
-class StatementChecker : public BaseVisitor {
+class StatementChecker : public VoidVisitor<StatementChecker, Env> {
     Env& env_;
     Signature currentFn_;
 public:
@@ -172,7 +172,7 @@ public:
 };
 
 // Checks that the function returns a value (for non-void). True if OK.
-class ReturnChecker : public BaseVisitor, public ValueGetter<bool, ReturnChecker, Env> {
+class ReturnChecker : public ValueVisitor<ReturnChecker, bool, Env> {
     Env& env_;
 public:
     explicit ReturnChecker(Env& env): env_(env) { v_ = false ; }
@@ -194,13 +194,11 @@ public:
 
 };
 
-class FunctionChecker : public BaseVisitor {
+class FunctionChecker : public VoidVisitor<FunctionChecker, Env> {
     Env& env_;
-    StatementChecker statementChecker;
 public:
     explicit FunctionChecker(Env& env)
-    : env_(env)
-    , statementChecker(env) {}
+    : env_(env) {}
 
     void visitFnDef(FnDef *p) override;
     void visitBlock(Block *p) override;
@@ -208,7 +206,7 @@ public:
     void visitArgument(Argument *p) override;
 };
 
-class ProgramChecker : public BaseVisitor {
+class ProgramChecker : public VoidVisitor<ProgramChecker, Env> {
     Env env_;
 public:
     explicit ProgramChecker(Env& env)

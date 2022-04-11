@@ -4,24 +4,6 @@
 namespace jlc {
 using namespace bnfc;
 
-// This class adds the ability to extend the Visitor interface by using templates, which
-// makes it possible to artificially return values.
-template <class ValueType, class VisitorImpl, class... Contexts> class ValueGetter {
-  protected:
-    ValueType v_;
-
-  public:
-    // Dispatches a new VisitorImpl and visits, it then puts the result in "v" which is
-    // available in VisitorImpl.
-    static ValueType Get(Visitable* p, Contexts&... ctx) {
-        VisitorImpl visitor(ctx...);
-        p->accept(&visitor);
-        return visitor.v_;
-    }
-
-    void Return(ValueType v) { v_ = v; }
-};
-
 class BaseVisitor : public Visitor {
   public:
     void visitProg(Prog* p);
@@ -98,4 +80,39 @@ class BaseVisitor : public Visitor {
     void visitString(String x);
     void visitIdent(Ident x);
 };
+
+template <class VisitorImpl, class... Contexts>
+class VoidVisitor : public BaseVisitor {
+  public:
+    static void Dispatch(Visitable* p, Contexts&... ctx) {
+        VisitorImpl visitor(ctx...);
+        p->accept(&visitor);
+    }
+
+    void inline constexpr Visit(Visitable* p) {
+        p->accept(this);
+    }
+
+};
+
+template <class VisitorImpl, class ValueType, class... Contexts>
+class ValueVisitor : public BaseVisitor {
+  protected:
+    ValueType v_;
+  public:
+
+    static ValueType Dispatch(Visitable* p, Contexts&... ctx) {
+        VisitorImpl visitor(ctx...);
+        p->accept(&visitor);
+        return visitor.v_;
+    }
+
+    void Return(ValueType v) { v_ = v; }
+
+    void inline constexpr Visit(Visitable* p) {
+        p->accept(this);
+    }
+
+};
+
 } // namespace jlc

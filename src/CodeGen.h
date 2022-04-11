@@ -63,14 +63,13 @@ class Codegen {
     using OutputType = std::shared_ptr<llvm::Module>;
 
     Codegen(const std::string& moduleName) {
+        blockLabelNr = 0;
         env_ = std::make_unique<Env>();
         context_ = std::make_unique<llvm::LLVMContext>();
         builder_ = std::make_unique<llvm::IRBuilder<>>(*context_);
         module_ = std::make_shared<llvm::Module>(moduleName, *context_);
 
-        int64 = llvm::Type::getInt64Ty(*context_);
         int32 = llvm::Type::getInt32Ty(*context_);
-        int16 = llvm::Type::getInt16Ty(*context_);
         int8 = llvm::Type::getInt8Ty(*context_);
         int1 = llvm::Type::getInt1Ty(*context_);
         voidTy = llvm::Type::getVoidTy(*context_);
@@ -86,23 +85,28 @@ class Codegen {
 
     // Entry point of codegen!
     std::optional<OutputType> run(InputType in) {
-        IntermediateBuilder builder(*this);
-        in->accept(&builder);
+        IntermediateBuilder::Dispatch(in.get(), *this);
         return module_;
     }
 
   private:
-    class IntermediateBuilder : public BaseVisitor {
+    class IntermediateBuilder : public VoidVisitor<IntermediateBuilder, Codegen> {
       public:
         IntermediateBuilder(Codegen& parent)
-            : parent_(parent), currentFn_(nullptr), blockLabelNr(0) {}
+            : parent_(parent), currentFn_(nullptr), isLastStatement_(false),
+              hasReturned_(false) {}
 
         void visitProgram(Program* p) override {
-            FunctionAdder functionAdder(parent_);
+            // Return if there are no functions
+            if (p->listtopdef_->empty())
+                return;
+
+            // Create the functions before building each
             for (TopDef* fn : *p->listtopdef_)
-                fn->accept(&functionAdder);
+                FunctionAdder::Dispatch(fn, parent_);
+            // Build the function
             for (TopDef* fn : *p->listtopdef_)
-                fn->accept(this);
+                Visit(fn);
         }
 
         void visitFnDef(FnDef* p) override {
@@ -119,78 +123,122 @@ class Codegen {
             auto argIt = fn->arg_begin();
             for (Arg* arg : *p->listarg_) {
                 Argument* argument = (Argument*)arg;
-                // llvm::Value* alloc = parent_.builder_->CreateAlloca(argIt->getType());
-                // parent_.builder_->CreateStore(argIt++, alloc);
                 parent_.env_->addVar(argument->ident_, argIt++);
             }
 
             // Start handling the statements
-            p->blk_->accept(this);
+            Visit(p->blk_);
+
+            // Insert return statement, even if not needed (can get opt. out later)
+            // TODO: This is an easy solution, might be better ones?
+            if (fn->getReturnType() == parent_.voidTy)
+                parent_.builder_->CreateRetVoid();
 
             // Pop the scope from stack
             parent_.env_->exitScope();
         }
 
-        void visitBlock(Block* p) override {
-            for (Stmt* stmt : *p->liststmt_)
-                stmt->accept(this);
+        void visitBlock(Block* p) override { Visit(p->liststmt_); }
+
+        void visitListStmt(ListStmt* p) override {
+
+            // Return if there are no statements
+            if (p->empty())
+                return;
+
+            hasReturned_ = false;
+
+            auto last = p->end() - 1;
+            for (auto stmt = p->begin(); stmt != last; ++stmt) {
+                Visit(*stmt);
+                if (hasReturned_)
+                    return;
+            }
+            isLastStatement_ = true;
+            Visit(*last);
         }
 
         void visitBStmt(BStmt* p) override {
             parent_.env_->enterScope();
-            p->blk_->accept(this);
+            Visit(p->blk_);
             parent_.env_->exitScope();
         }
 
         void visitDecl(Decl* p) override {
-            DeclHandler declHandler(parent_);
-            p->accept(&declHandler);
+            DeclHandler::Dispatch(p, parent_);
         }
 
-        void visitSExp(SExp* p) override { ExpHandler::Get(p->expr_, parent_); }
+        void visitSExp(SExp* p) override { ExpHandler::Dispatch(p->expr_, parent_); }
 
         void visitRet(Ret* p) override {
-            parent_.builder_->CreateRet(ExpHandler::Get(p->expr_, parent_));
+            parent_.builder_->CreateRet(ExpHandler::Dispatch(p->expr_, parent_));
+            hasReturned_ = true;
+        }
+
+        void visitVRet(VRet* p) override {
+            parent_.builder_->CreateRetVoid();
+            hasReturned_ = true;
         }
 
         void visitAss(Ass* p) override {
-            llvm::Value* exp = ExpHandler::Get(p->expr_, parent_);
+            llvm::Value* exp = ExpHandler::Dispatch(p->expr_, parent_);
             parent_.env_->updateVar(p->ident_, exp);
-            // llvm::Value* var = parent_.env_->findVar(p->ident_);
-            // parent_.builder_->CreateStore(exp, var);
         }
 
         void visitCond(Cond* p) override {
-            llvm::Value* cond = ExpHandler::Get(p->expr_, parent_);
+            llvm::Value* cond = ExpHandler::Dispatch(p->expr_, parent_);
             llvm::BasicBlock* trueBlock = genBasicBlock();
             llvm::BasicBlock* contBlock = genBasicBlock();
             parent_.builder_->CreateCondBr(cond, trueBlock, contBlock);
             parent_.builder_->SetInsertPoint(trueBlock);
-            p->stmt_->accept(this);
-            parent_.builder_->CreateBr(contBlock);
+
+            Visit(p->stmt_);
+
+            if (!hasReturned_)
+                parent_.builder_->CreateBr(contBlock);
             parent_.builder_->SetInsertPoint(contBlock);
+            hasReturned_ = false;
+        }
+
+        void visitCondElse(CondElse* p) override {
+            llvm::Value* cond = ExpHandler::Dispatch(p->expr_, parent_);
+            llvm::BasicBlock* trueBlock = genBasicBlock();
+            llvm::BasicBlock* elseBlock = genBasicBlock();
+            llvm::BasicBlock* contBlock = nullptr;
+            if (!isLastStatement_)
+                contBlock = genBasicBlock();
+            parent_.builder_->CreateCondBr(cond, trueBlock, elseBlock);
+            parent_.builder_->SetInsertPoint(trueBlock);
+            Visit(p->stmt_1);
+            if (!isLastStatement_)
+                parent_.builder_->CreateBr(contBlock);
+            parent_.builder_->SetInsertPoint(elseBlock);
+            Visit(p->stmt_2);
+            if (!isLastStatement_) {
+                parent_.builder_->CreateBr(contBlock);
+                parent_.builder_->SetInsertPoint(contBlock);
+            }
         }
 
       private:
         inline llvm::BasicBlock* genBasicBlock() {
             return llvm::BasicBlock::Create(
-                *parent_.context_, "label_" + std::to_string(blockLabelNr++), currentFn_);
+                *parent_.context_, "label_" + std::to_string(parent_.blockLabelNr++),
+                currentFn_);
         }
 
         Codegen& parent_;
         llvm::Function* currentFn_;
-        int blockLabelNr;
+
+        // TODO: There has to be a better way...
+        bool isLastStatement_;
+        bool hasReturned_;
     };
 
-    class ExpHandler : public BaseVisitor,
-                       public ValueGetter<llvm::Value*, ExpHandler, Codegen> {
+    class ExpHandler : public ValueVisitor<ExpHandler, llvm::Value*, Codegen> {
       public:
         ExpHandler(Codegen& parent) : parent_(parent) {}
 
-        void visitEAdd(EAdd* p) override {
-            Return(parent_.builder_->CreateAdd(ExpHandler::Get(p->expr_1, parent_),
-                                               ExpHandler::Get(p->expr_2, parent_)));
-        }
         void visitELitDoub(ELitDoub* p) override {
             Return(llvm::ConstantFP::get(parent_.doubleTy, p->double_));
         }
@@ -210,7 +258,7 @@ class Codegen {
         }
 
         void visitETyped(ETyped* p) override {
-            exprType_ = TypeEncoder::Get(p->type_, parent_);
+            exprType_ = TypeEncoder::Dispatch(p->type_, parent_);
             p->expr_->accept(this);
         }
 
@@ -218,7 +266,7 @@ class Codegen {
             llvm::Function* fn = parent_.env_->findFn(p->ident_);
             std::vector<llvm::Value*> args;
             for (Expr* exp : *p->listexpr_)
-                args.push_back(ExpHandler::Get(exp, parent_));
+                args.push_back(ExpHandler::Dispatch(exp, parent_));
             Return(parent_.builder_->CreateCall(fn, args));
         }
 
@@ -228,21 +276,23 @@ class Codegen {
             // TODO: Load here and return then.  Alloca vs registers?
         }
 
+        void visitEMul(EMul* p) override {
+            Return(BinOpBuilder::Dispatch(p->mulop_, parent_, p->expr_1, p->expr_2));
+        }
         void visitERel(ERel* p) override {
-            llvm::Value* exp1 = ExpHandler::Get(p->expr_1, parent_);
-            llvm::Value* exp2 = ExpHandler::Get(p->expr_2, parent_);
-            Return(RelOpBuilder::Get(p->relop_, parent_, exp1, exp2));
+            Return(BinOpBuilder::Dispatch(p->relop_, parent_, p->expr_1, p->expr_2));
+        }
+        void visitEAdd(EAdd* p) override {
+            Return(BinOpBuilder::Dispatch(p->addop_, parent_, p->expr_1, p->expr_2));
         }
 
-        // TODO: Is there a point to variadic templates. Could just call RelOpBuilder with
-        //       ERel and set the local e1, e2 there. Or might just do a switch on the
-        //       diff types
-        class RelOpBuilder : public BaseVisitor,
-                             public ValueGetter<llvm::Value*, RelOpBuilder, Codegen,
-                                                llvm::Value*, llvm::Value*> {
+        class BinOpBuilder
+            : public ValueVisitor<BinOpBuilder, llvm::Value*, Codegen, Expr*, Expr*> {
           public:
-            RelOpBuilder(Codegen& parent, llvm::Value* e1, llvm::Value* e2)
-                : parent_(parent), e1_(e1), e2_(e2) {}
+            BinOpBuilder(Codegen& parent, Expr* e1, Expr* e2) : parent_(parent) {
+                e1_ = ExpHandler::Dispatch(e1, parent_);
+                e2_ = ExpHandler::Dispatch(e2, parent_);
+            }
 
             void visitEQU(EQU* p) override {
                 if (e1_->getType() == parent_.doubleTy)
@@ -263,6 +313,23 @@ class Codegen {
                     Return(parent_.builder_->CreateICmpSLT(e1_, e2_));
             }
 
+            void visitPlus(Plus* p) override {
+                Return(parent_.builder_->CreateAdd(e1_, e2_));
+            }
+
+            void visitMinus(Minus* p) override {
+                Return(parent_.builder_->CreateSub(e1_, e2_));
+            }
+
+            void visitTimes(Times* p) override {
+                Return(parent_.builder_->CreateMul(e1_, e2_));
+            }
+
+            void visitMod(Mod* p) override {
+                // TODO: Mod
+                //Return(parent_.builder_->CreateSdi(e1_, e2_));
+            }
+
           private:
             Codegen& parent_;
             llvm::Value* e1_;
@@ -274,7 +341,7 @@ class Codegen {
         llvm::Type* exprType_;
     };
 
-    class DeclHandler : public BaseVisitor {
+    class DeclHandler : public VoidVisitor<DeclHandler, Codegen> {
       public:
         DeclHandler(Codegen& parent) : parent_(parent) {}
         void visitDecl(Decl* p) override {
@@ -283,22 +350,17 @@ class Codegen {
                 i->accept(this);
         }
         void visitInit(Init* p) override {
-            llvm::Value* exp = ExpHandler::Get(p->expr_, parent_);
-            llvm::Type* declType = TypeEncoder::Get(declType_, parent_);
-            // llvm::Value* var = parent_.builder_->CreateAlloca(declType, 0, p->ident_);
-            // parent_.builder_->CreateStore(exp, var);
+            llvm::Value* exp = ExpHandler::Dispatch(p->expr_, parent_);
+            llvm::Type* declType = TypeEncoder::Dispatch(declType_, parent_);
             llvm::Value* var =
                 parent_.builder_->CreateOr(exp, llvm::ConstantInt::get(declType, 0));
             parent_.env_->addVar(p->ident_, var);
         }
         void visitNoInit(NoInit* p) override {
-            llvm::Type* declType = TypeEncoder::Get(declType_, parent_);
-            // llvm::Value* var =
-            //     parent_.builder_->CreateAlloca(declType, 0, p->ident_);
+            llvm::Type* declType = TypeEncoder::Dispatch(declType_, parent_);
             llvm::Value* var =
-                parent_.builder_->CreateOr(DefaultValue::Get(declType_, parent_),
+                parent_.builder_->CreateOr(DefaultValue::Dispatch(declType_, parent_),
                                            llvm::ConstantInt::get(declType, 0));
-            // parent_.builder_->CreateStore(DefaultValue::Get(declType_, parent_), var);
             parent_.env_->addVar(p->ident_, var);
         }
 
@@ -307,46 +369,29 @@ class Codegen {
         Codegen& parent_;
     };
 
-    class FunctionAdder : public BaseVisitor {
+    class FunctionAdder : public VoidVisitor<FunctionAdder, Codegen> {
       public:
-        FunctionAdder(Codegen& parent)
-            : m_(*parent.module_), c_(*parent.context_), parent_(parent) {}
+        FunctionAdder(Codegen& parent) : parent_(parent) {}
 
         void visitFnDef(FnDef* p) override {
-            std::vector<llvm::Type*> argTypes;
-            for (Arg* a : *p->listarg_) {
-                Argument* arg = (Argument*)a;
-                argTypes.push_back(TypeEncoder::Get(arg->type_, parent_));
-            }
+            std::vector<llvm::Type*> argsT;
+            for (Arg* arg : *p->listarg_)
+                argsT.push_back(TypeEncoder::Dispatch(((Argument*)arg)->type_, parent_));
 
-            auto fnType = llvm::FunctionType::get(TypeEncoder::Get(p->type_, parent_),
-                                                  argTypes, false);
+            auto fnType = llvm::FunctionType::get(
+                TypeEncoder::Dispatch(p->type_, parent_), argsT, false);
             llvm::Function* fn = llvm::Function::Create(
                 fnType, llvm::Function::ExternalLinkage, p->ident_, *parent_.module_);
-
-            /*
-            llvm::FunctionCallee callee = m_.getOrInsertFunction(
-                p->ident_, TypeEncoder::Get(p->type_, parent_), argTypes.begin(),
-            argTypes.end()); llvm::Function* fn =
-            llvm::cast<llvm::Function>(callee.getCallee());
-            fn->setCallingConv(llvm::CallingConv::C);
-            llvm::Function::arg_iterator argIt = fn->arg_begin();
-            for (Arg* a : *p->listarg_) {
-                Argument* arg = (Argument*)a;
-                argIt->setName(arg->ident_);
-            } */
 
             parent_.env_->addSignature(p->ident_, fn);
         }
 
       private:
-        llvm::Module& m_;
-        llvm::LLVMContext& c_;
         Codegen& parent_;
     };
 
-    class TypeEncoder : public BaseVisitor,
-                        public ValueGetter<llvm::Type*, TypeEncoder, Codegen> {
+    // Returns the llvm-equivalent (llvm::Type*) from a bnfc::Type*
+    class TypeEncoder : public ValueVisitor<TypeEncoder, llvm::Type*, Codegen> {
       public:
         TypeEncoder(Codegen& parent) : parent_(parent) {}
 
@@ -360,8 +405,8 @@ class Codegen {
         Codegen& parent_;
     };
 
-    class DefaultValue : public BaseVisitor,
-                         public ValueGetter<llvm::Constant*, DefaultValue, Codegen> {
+    // Returns the default value for each type
+    class DefaultValue : public ValueVisitor<DefaultValue, llvm::Constant*, Codegen> {
       public:
         DefaultValue(Codegen& parent) : parent_(parent) {}
 
@@ -389,13 +434,12 @@ class Codegen {
         env_->addSignature(ident, fn);
     }
 
+    int blockLabelNr;
     std::unique_ptr<Env> env_;
     std::unique_ptr<llvm::IRBuilder<>> builder_;
     std::unique_ptr<llvm::LLVMContext> context_;
     std::shared_ptr<llvm::Module> module_;
-    llvm::Type* int64;
     llvm::Type* int32;
-    llvm::Type* int16;
     llvm::Type* int8;
     llvm::Type* int1;
     llvm::Type* voidTy;

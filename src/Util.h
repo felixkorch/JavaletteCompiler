@@ -3,6 +3,7 @@
 #include <optional>
 #include <vector>
 #include <unordered_map>
+#include <stdio.h>
 
 namespace jlc {
 
@@ -27,17 +28,17 @@ inline auto getValue(const Key& key, std::unordered_map<Key, Val>& map) {
 }
 
 // Tries to read the file with the given name. If fileName is empty,
-// start reading from std in. Exits(1) if failed, so guarantees to return a valid
+// start reading from std in. Throws on failure, so guarantees to return a valid
 // file-pointer.
 inline FILE* readFileOrInput(const char* fileName) {
     FILE* input;
     if (fileName) {
         input = fopen(fileName, "r");
-        if (!input) {
-            exit(1);
-        }
-    } else
+        if (!input)
+            throw std::exception();
+    } else {
         input = stdin;
+    }
     return input;
 }
 

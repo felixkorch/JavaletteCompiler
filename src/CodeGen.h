@@ -1,5 +1,6 @@
 #pragma once
 #include "BaseVisitor.h"
+#include "TypeError.h"
 #include "Util.h"
 #include "bnfc/Absyn.H"
 #include "llvm/IR/IRBuilder.h"
@@ -10,10 +11,10 @@
 
 namespace jlc::codegen {
 
-using Scope = std::unordered_map<std::string, llvm::Value*>;
-
-// Defines the environment while generating IR Code
+// Defines the environment for generating IR Code
 class Env {
+    using Scope = std::unordered_map<std::string, llvm::Value*>;
+
   public:
     Env() : scopes_(), signatures_(), labelNr_(0) {}
 
@@ -24,7 +25,7 @@ class Env {
     // Called in the first pass
     void addSignature(const std::string& fnName, llvm::Function* fn) {
         if (auto [_, success] = signatures_.insert({fnName, fn}); !success)
-            std::cerr << "[CodeGen] Could not add signature." << std::endl;
+            throw std::runtime_error("ERROR: Failed to add signature '" + fnName + "'");
     }
 
     llvm::Value* findVar(const std::string& ident) {
@@ -32,39 +33,38 @@ class Env {
             if (auto var = map::getValue(ident, scope))
                 return var->get();
         }
-        return nullptr;
+        throw std::runtime_error("ERROR: Variable '" + ident +
+                                 "' not found in LLVM-CodeGen");
     }
     // Called when a function call is invoked, throws if the function doesn't exist.
     llvm::Function* findFn(const std::string& fn) {
         if (auto fnType = map::getValue(fn, signatures_))
             return fnType->get();
-        return nullptr;
+        throw std::runtime_error("ERROR: Function '" + fn +
+                                 "' not found in LLVM-CodeGen");
     }
     // Adds a variable to the current scope, throws if it already exists.
-    void addVar(const std::string& name, llvm::Value* v) {
+    void addVar(const std::string& ident, llvm::Value* v) {
         Scope& currentScope = scopes_.front();
-        if (auto [_, success] = currentScope.insert({name, v}); !success)
-            std::cerr << "[CodeGen] Could not add var." << std::endl;
+        if (auto [_, success] = currentScope.insert({ident, v}); !success)
+            throw std::runtime_error("ERROR: Failed to add var '" + ident + "'");
     }
 
-    void updateVar(const std::string& ident, llvm::Value* v) {
-        for (auto& scope : scopes_) {
-            if (auto var = map::getValue(ident, scope))
-                var->get() = v;
-        }
-    }
+    void setCurrentFn(llvm::Function* fn) { currentFn_ = fn; }
+
+    llvm::Function* getCurrentFn() { return currentFn_; }
 
     std::string getNextLabel() { return "label_" + std::to_string(labelNr_++); }
 
   private:
     std::list<Scope> scopes_;
     std::unordered_map<std::string, llvm::Function*> signatures_;
+    llvm::Function* currentFn_;
     int labelNr_;
 };
 
 class Codegen {
   public:
-
     Codegen(const std::string& moduleName = std::string()) {
         env_ = std::make_unique<Env>();
         context_ = std::make_unique<llvm::LLVMContext>();
@@ -92,15 +92,13 @@ class Codegen {
             removeUnreachableCode(fn);
     }
 
-    llvm::Module&  getModuleRef() {
-        return *module_;
-    }
+    llvm::Module& getModuleRef() { return *module_; }
 
   private:
     // This class builds the whole program.
     class IntermediateBuilder : public VoidVisitor<IntermediateBuilder, Codegen> {
       public:
-        IntermediateBuilder(Codegen& parent) : parent_(parent), currentFn_(nullptr) {}
+        IntermediateBuilder(Codegen& parent) : parent_(parent), isLastStmt_(false) {}
 
         void visitProgram(Program* p) override {
             // Create the functions before building each
@@ -112,16 +110,17 @@ class Codegen {
         }
 
         void visitFnDef(FnDef* p) override {
-            currentFn_ = parent_.env_->findFn(p->ident_);
+            llvm::Function* currentFn = parent_.env_->findFn(p->ident_);
+            parent_.env_->setCurrentFn(currentFn);
             llvm::BasicBlock* bb = llvm::BasicBlock::Create(
-                *parent_.context_, p->ident_ + "_entry", currentFn_);
+                *parent_.context_, p->ident_ + "_entry", currentFn);
             parent_.builder_->SetInsertPoint(bb);
 
             // Push scope of the function to stack
             parent_.env_->enterScope();
 
             // Add the argument variables and their corresponding Value* to current scope.
-            auto argIt = currentFn_->arg_begin();
+            auto argIt = currentFn->arg_begin();
             for (Arg* arg : *p->listarg_) {
                 llvm::Value* argPtr = parent_.builder_->CreateAlloca(argIt->getType());
                 parent_.builder_->CreateStore(argIt, argPtr);
@@ -133,7 +132,7 @@ class Codegen {
             Visit(p->blk_);
 
             // Insert return, if the function is void
-            if (currentFn_->getReturnType() == parent_.voidTy)
+            if (currentFn->getReturnType() == parent_.voidTy)
                 parent_.builder_->CreateRetVoid();
 
             // Pop the scope from stack
@@ -143,8 +142,14 @@ class Codegen {
         void visitBlock(Block* p) override { Visit(p->liststmt_); }
 
         void visitListStmt(ListStmt* p) override {
-            for (auto stmt : *p)
-                Visit(stmt);
+            if (p->empty())
+                return;
+            auto last = p->end() - 1;
+            for (auto stmt = p->begin(); stmt != last; ++stmt)
+                Visit(*stmt);
+            isLastStmt_ = true;
+            Visit(*last);
+            isLastStmt_ = false;
         }
 
         void visitBStmt(BStmt* p) override {
@@ -175,20 +180,22 @@ class Codegen {
 
         void visitCond(Cond* p) override {
             llvm::Value* cond = ExpBuilder::Dispatch(p->expr_, parent_);
-            llvm::BasicBlock* trueBlock = newBasicBlock();
-            llvm::BasicBlock* contBlock = newBasicBlock();
+            llvm::BasicBlock* trueBlock = parent_.newBasicBlock();
+            llvm::BasicBlock* contBlock = parent_.newBasicBlock();
             parent_.builder_->CreateCondBr(cond, trueBlock, contBlock);
             parent_.builder_->SetInsertPoint(trueBlock);
             Visit(p->stmt_);
             parent_.builder_->CreateBr(contBlock);
             parent_.builder_->SetInsertPoint(contBlock);
+            if(isLastStmt_)
+                parent_.builder_->CreateUnreachable();
         }
 
         void visitCondElse(CondElse* p) override {
             llvm::Value* cond = ExpBuilder::Dispatch(p->expr_, parent_);
-            llvm::BasicBlock* trueBlock = newBasicBlock();
-            llvm::BasicBlock* elseBlock = newBasicBlock();
-            llvm::BasicBlock* contBlock = newBasicBlock();
+            llvm::BasicBlock* trueBlock = parent_.newBasicBlock();
+            llvm::BasicBlock* elseBlock = parent_.newBasicBlock();
+            llvm::BasicBlock* contBlock = parent_.newBasicBlock();
             parent_.builder_->CreateCondBr(cond, trueBlock, elseBlock);
             parent_.builder_->SetInsertPoint(trueBlock);
             Visit(p->stmt_1);
@@ -197,12 +204,14 @@ class Codegen {
             Visit(p->stmt_2);
             parent_.builder_->CreateBr(contBlock);
             parent_.builder_->SetInsertPoint(contBlock);
+            if(isLastStmt_)
+                parent_.builder_->CreateUnreachable();
         }
 
         void visitWhile(While* p) override {
-            llvm::BasicBlock* testBlock = newBasicBlock();
-            llvm::BasicBlock* trueBlock = newBasicBlock();
-            llvm::BasicBlock* contBlock = newBasicBlock();
+            llvm::BasicBlock* testBlock = parent_.newBasicBlock();
+            llvm::BasicBlock* trueBlock = parent_.newBasicBlock();
+            llvm::BasicBlock* contBlock = parent_.newBasicBlock();
             parent_.builder_->CreateBr(testBlock); // Connect prev. block with test-block
             parent_.builder_->SetInsertPoint(testBlock); // Build the test-block
             llvm::Value* cond = ExpBuilder::Dispatch(p->expr_, parent_);
@@ -229,18 +238,11 @@ class Codegen {
             parent_.builder_->CreateStore(newVal, varPtr);
         }
 
-        void visitEmpty(Empty* p) override {
-
-        }
+        void visitEmpty(Empty* p) override {}
 
       private:
-        inline llvm::BasicBlock* newBasicBlock() {
-            return llvm::BasicBlock::Create(*parent_.context_,
-                                            parent_.env_->getNextLabel(), currentFn_);
-        }
-
         Codegen& parent_;
-        llvm::Function* currentFn_;
+        bool isLastStmt_;
     };
 
     // Returns a llvm::Value* representation of the expression
@@ -311,12 +313,75 @@ class Codegen {
             Return(BinOpBuilder::Dispatch(p->addop_, parent_, p->expr_1, p->expr_2));
         }
 
+        // TODO: Make lazy semantics cleaner?
         void visitEAnd(EAnd* p) override {
-            Return(BinOpBuilder::Dispatch(p, parent_, p->expr_1, p->expr_2));
+            llvm::BasicBlock* contBlock = parent_.newBasicBlock();
+            llvm::BasicBlock* evalSecond = parent_.newBasicBlock();
+            llvm::BasicBlock* secondTrue = parent_.newBasicBlock();
+
+            // Store false by default
+            llvm::Value* result = parent_.builder_->CreateAlloca(parent_.int1);
+            parent_.builder_->CreateStore(llvm::ConstantInt::get(parent_.int1, 0),
+                                          result);
+
+            // Evaluate expr 1
+            llvm::Value* e1 = ExpBuilder::Dispatch(p->expr_1, parent_);
+            llvm::Value* e1True = parent_.builder_->CreateICmpEQ(
+                e1, llvm::ConstantInt::get(parent_.int1, 1));
+            parent_.builder_->CreateCondBr(e1True, evalSecond, contBlock);
+
+            // Evaluate expr 2
+            parent_.builder_->SetInsertPoint(evalSecond);
+            llvm::Value* e2 = ExpBuilder::Dispatch(p->expr_2, parent_);
+            llvm::Value* e2True = parent_.builder_->CreateICmpEQ(
+                e2, llvm::ConstantInt::get(parent_.int1, 1));
+            parent_.builder_->CreateCondBr(e2True, secondTrue, contBlock);
+
+            // Store true if both true
+            parent_.builder_->SetInsertPoint(secondTrue);
+            parent_.builder_->CreateStore(llvm::ConstantInt::get(parent_.int1, 1),
+                                          result);
+            parent_.builder_->CreateBr(contBlock);
+
+            // Finally, load result for usage in statement
+            parent_.builder_->SetInsertPoint(contBlock);
+            result = parent_.builder_->CreateLoad(parent_.int1, result);
+            Return(result);
         }
 
         void visitEOr(EOr* p) override {
-            Return(BinOpBuilder::Dispatch(p, parent_, p->expr_1, p->expr_2));
+            llvm::BasicBlock* contBlock = parent_.newBasicBlock();
+            llvm::BasicBlock* evalSecond = parent_.newBasicBlock();
+            llvm::BasicBlock* secondFalse = parent_.newBasicBlock();
+
+            // Store true by default
+            llvm::Value* result = parent_.builder_->CreateAlloca(parent_.int1);
+            parent_.builder_->CreateStore(llvm::ConstantInt::get(parent_.int1, 1),
+                                          result);
+
+            // Evaluate expr 1
+            llvm::Value* e1 = ExpBuilder::Dispatch(p->expr_1, parent_);
+            llvm::Value* e1True = parent_.builder_->CreateICmpEQ(
+                e1, llvm::ConstantInt::get(parent_.int1, 1));
+            parent_.builder_->CreateCondBr(e1True, contBlock, evalSecond);
+
+            // Evaluate expr 2
+            parent_.builder_->SetInsertPoint(evalSecond);
+            llvm::Value* e2 = ExpBuilder::Dispatch(p->expr_2, parent_);
+            llvm::Value* e2True = parent_.builder_->CreateICmpEQ(
+                e2, llvm::ConstantInt::get(parent_.int1, 1));
+            parent_.builder_->CreateCondBr(e2True, contBlock, secondFalse);
+
+            // Store false if both false
+            parent_.builder_->SetInsertPoint(secondFalse);
+            parent_.builder_->CreateStore(llvm::ConstantInt::get(parent_.int1, 0),
+                                          result);
+            parent_.builder_->CreateBr(contBlock);
+
+            // Finally, load result for usage in statement
+            parent_.builder_->SetInsertPoint(contBlock);
+            result = parent_.builder_->CreateLoad(parent_.int1, result);
+            Return(result);
         }
 
         class BinOpBuilder
@@ -325,14 +390,6 @@ class Codegen {
             BinOpBuilder(Codegen& parent, Expr* e1, Expr* e2) : parent_(parent) {
                 e1_ = ExpBuilder::Dispatch(e1, parent_);
                 e2_ = ExpBuilder::Dispatch(e2, parent_);
-            }
-
-            void visitEAnd(EAnd* p) override {
-                Return(parent_.builder_->CreateAnd(e1_, e2_));
-            }
-
-            void visitEOr(EOr* p) override {
-                Return(parent_.builder_->CreateOr(e1_, e2_));
             }
 
             void visitEQU(EQU* p) override {
@@ -500,6 +557,11 @@ class Codegen {
       private:
         Codegen& parent_;
     };
+
+    inline llvm::BasicBlock* newBasicBlock() {
+        return llvm::BasicBlock::Create(*context_, env_->getNextLabel(),
+                                        env_->getCurrentFn());
+    }
 
     void declareExternFunction(const std::string& ident, llvm::Type* retType,
                                llvm::ArrayRef<llvm::Type*> paramTypes,

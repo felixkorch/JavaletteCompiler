@@ -1,8 +1,8 @@
+MAKEFLAGS := --jobs=$(shell nproc)
 OBJ_DIR = build
 SRC_DIR = src
 GEN_DIR = bnfc
 BIN_DIR = .
-COMPILER_NAME = jlc
 
 MAIN_SRC = $(SRC_DIR)/Main.cpp
 COMMON_SRC := $(filter-out $(MAIN_SRC), $(wildcard $(SRC_DIR)/*.cpp))
@@ -42,15 +42,15 @@ BISON_OPTS=-t -pjavalette_
 
 .PHONY: all clean debug
 
-all: $(COMPILER_NAME)
+all: jlc
 
 debug: FLAGS += -DDEBUG -g
-debug: $(COMPILER_NAME)
+debug: jlc
 
 clean:
 	rm -rf $(GEN_DIR) build
 
-$(COMPILER_NAME): $(OBJ) $(MAIN_OBJ) | $(BIN_DIR)
+jlc: $(OBJ) $(MAIN_OBJ) | $(BIN_DIR)
 	$(CC) -o $(BIN_DIR)/$@ $^ $(LINKS)
 
 $(GEN_SRC)&:

@@ -10,9 +10,13 @@ using namespace jlc::codegen;
 namespace fs = std::filesystem;
 
 int main(int argc, char** argv) {
-    const char* in = argv[1];
-    FILE* input = readFileOrInput(in);
+    FILE* input = nullptr;
 
+    try {
+        input = readFileOrInput(argv[1]);
+    } catch(std::exception& e) {
+        std::cerr << "ERROR: Failed to read source file" << std::endl;
+    }
     Parser parser;
 
     try {
@@ -33,16 +37,20 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::cerr << "OK" << std::endl;
-
     Codegen codegen;
-    // TODO: Use exceptions here too.
-    codegen.run(typeChecker.getAST());
+    try {
+        codegen.run(typeChecker.getAST());
+    } catch(std::runtime_error& e) {
+        std::cerr << e.what() << std::endl;
+        return 1;
+    }
 
     llvm::Module& m = codegen.getModuleRef();
     std::string out;
     llvm::raw_string_ostream outStream(out);
     m.print(outStream, nullptr);
     std::cout << out;
+
+    std::cerr << "OK" << std::endl;
     return 0;
 }

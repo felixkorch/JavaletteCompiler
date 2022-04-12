@@ -24,4 +24,5 @@ class TypeError : public std::exception {
 
     const char* what() const throw() { return msg_.c_str(); }
 };
+
 } // namespace jlc::typechecker

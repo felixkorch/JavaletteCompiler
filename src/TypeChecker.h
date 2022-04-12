@@ -109,8 +109,8 @@ class TypeInferrer : public ValueVisitor<TypeInferrer, ETyped*, Env> {
     Env& env_;
 
     static bool typeIn(TypeCode t, std::initializer_list<TypeCode> list);
-    Type* checkBinExp(Expr* e1, Expr* e2, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
-    Type* checkUnExp(Expr* e, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
+    auto checkBinExp(Expr* e1, Expr* e2, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
+    auto checkUnExp(Expr* e, const std::string& op, std::initializer_list<TypeCode> allowedTypes);
 
 public:
     explicit TypeInferrer(Env& env): env_(env) {}

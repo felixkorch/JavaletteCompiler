@@ -235,7 +235,7 @@ void ReturnChecker::visitCondElse(CondElse* p) {
         Return(true);
 }
 
-/********************   DeclHandler class    ********************/
+/********************   DeclBuilder class    ********************/
 
 void DeclHandler::visitDecl(Decl* p) {
     t = TypeCoder::Dispatch(p->type_);
@@ -271,8 +271,8 @@ bool TypeInferrer::typeIn(TypeCode t, std::initializer_list<TypeCode> list) {
 }
 
 // Could be arithmetic / relative
-Type* TypeInferrer::checkBinExp(Expr* e1, Expr* e2, const std::string& op,
-                                std::initializer_list<TypeCode> allowedTypes) {
+auto TypeInferrer::checkBinExp(Expr* e1, Expr* e2, const std::string& op,
+                               std::initializer_list<TypeCode> allowedTypes) {
     ETyped* e1Typed = TypeInferrer::Dispatch(e1, env_);
     ETyped* e2Typed = TypeInferrer::Dispatch(e2, env_);
     TypeCode e1Type = TypeCoder::Dispatch(e1Typed->type_);
@@ -288,11 +288,11 @@ Type* TypeInferrer::checkBinExp(Expr* e1, Expr* e2, const std::string& op,
                             toString(e2Type) + " to binary " + op,
                         e1->line_number, e1->char_number);
     }
-    return e1Typed->type_;
+    return std::pair(e1Typed, e2Typed);
 }
 
-Type* TypeInferrer::checkUnExp(Expr* e, const std::string& op,
-                               std::initializer_list<TypeCode> allowedTypes) {
+auto TypeInferrer::checkUnExp(Expr* e, const std::string& op,
+                              std::initializer_list<TypeCode> allowedTypes) {
     ETyped* eTyped = TypeInferrer::Dispatch(e, env_);
     TypeCode eTypeCode = TypeCoder::Dispatch(eTyped->type_);
 
@@ -301,7 +301,7 @@ Type* TypeInferrer::checkUnExp(Expr* e, const std::string& op,
                             op,
                         e->line_number, e->char_number);
     }
-    return eTyped->type_;
+    return eTyped;
 }
 
 void TypeInferrer::visitELitInt(ELitInt* p) { Return(new ETyped(p, new Int)); }
@@ -324,64 +324,80 @@ void TypeInferrer::visitListItem(ListItem* p) {
 // Minus (INT, DOUBLE)
 void TypeInferrer::visitEAdd(EAdd* p) {
     OpCode addOpCode = OpCoder::Dispatch(p->addop_);
-    Type* t = checkBinExp(p->expr_1, p->expr_2, toString(addOpCode),
-                          {TypeCode::INT, TypeCode::DOUBLE});
-    Return(new ETyped(p, t));
+    auto [e1Typed, e2Typed] = checkBinExp(p->expr_1, p->expr_2, toString(addOpCode),
+                                          {TypeCode::INT, TypeCode::DOUBLE});
+    p->expr_1 = e1Typed;
+    p->expr_2 = e2Typed;
+    Return(new ETyped(p, e1Typed->type_));
 }
 
 // Times, Div (INT, DOUBLE)
 // Mod        (INT)
 void TypeInferrer::visitEMul(EMul* p) {
     OpCode mulOpCode = OpCoder::Dispatch(p->mulop_);
-    Type* t = nullptr;
-    if (mulOpCode == OpCode::MOD)
-        t = checkBinExp(p->expr_1, p->expr_2, toString(mulOpCode), {TypeCode::INT});
-    else
-        t = checkBinExp(p->expr_1, p->expr_2, toString(mulOpCode),
-                        {TypeCode::INT, TypeCode::DOUBLE});
-    Return(new ETyped(p, t));
+    auto [e1Typed, e2Typed] =
+        mulOpCode == OpCode::MOD
+            ? checkBinExp(p->expr_1, p->expr_2, toString(mulOpCode), {TypeCode::INT})
+            : checkBinExp(p->expr_1, p->expr_2, toString(mulOpCode),
+                          {TypeCode::INT, TypeCode::DOUBLE});
+    p->expr_1 = e1Typed;
+    p->expr_2 = e2Typed;
+    Return(new ETyped(p, e1Typed->type_));
 }
 
 // OR (BOOLEAN)
 void TypeInferrer::visitEOr(EOr* p) {
-    checkBinExp(p->expr_1, p->expr_2, toString(OpCode::OR), {TypeCode::BOOLEAN});
+    auto [e1Typed, e2Typed] =
+        checkBinExp(p->expr_1, p->expr_2, toString(OpCode::OR), {TypeCode::BOOLEAN});
+    p->expr_1 = e1Typed;
+    p->expr_2 = e2Typed;
     Return(new ETyped(p, new Bool));
 }
 
 // AND (BOOLEAN)
 void TypeInferrer::visitEAnd(EAnd* p) {
-    checkBinExp(p->expr_1, p->expr_2, toString(OpCode::AND), {TypeCode::BOOLEAN});
+    auto [e1Typed, e2Typed] =
+        checkBinExp(p->expr_1, p->expr_2, toString(OpCode::AND), {TypeCode::BOOLEAN});
+    p->expr_1 = e1Typed;
+    p->expr_2 = e2Typed;
     Return(new ETyped(p, new Bool));
 }
 
 // NOT (BOOLEAN)
 void TypeInferrer::visitNot(Not* p) {
-    checkUnExp(p->expr_, toString(OpCode::NOT), {TypeCode::BOOLEAN});
+    ETyped* eTyped = checkUnExp(p->expr_, toString(OpCode::NOT), {TypeCode::BOOLEAN});
+    p->expr_ = eTyped;
     Return(new ETyped(p, new Bool));
 }
 
 // NEG (INT, DOUBLE)
 void TypeInferrer::visitNeg(Neg* p) {
-    Type* t =
+    ETyped* eTyped =
         checkUnExp(p->expr_, toString(OpCode::NEG), {TypeCode::INT, TypeCode::DOUBLE});
-    Return(new ETyped(p, t));
+    p->expr_ = eTyped;
+    Return(new ETyped(p, eTyped->type_));
 }
 
 // LTH, LE, GTH, GE (INT, DOUBLE)
 // EQU, NE          (INT, DOUBLE, BOOLEAN)
 void TypeInferrer::visitERel(ERel* p) {
     OpCode opc = OpCoder::Dispatch(p->relop_);
+    ETyped* e1Typed;
+    ETyped* e2Typed;
     switch (opc) {
     case OpCode::EQU:
     case OpCode::NE:
-        checkBinExp(p->expr_1, p->expr_2, toString(opc),
-                    {TypeCode::BOOLEAN, TypeCode::INT, TypeCode::DOUBLE});
+        std::tie(e1Typed, e2Typed) =
+            checkBinExp(p->expr_1, p->expr_2, toString(opc),
+                        {TypeCode::BOOLEAN, TypeCode::INT, TypeCode::DOUBLE});
         break;
     default:
-        checkBinExp(p->expr_1, p->expr_2, toString(opc),
-                    {TypeCode::INT, TypeCode::DOUBLE});
+        std::tie(e1Typed, e2Typed) = checkBinExp(p->expr_1, p->expr_2, toString(opc),
+                                                 {TypeCode::INT, TypeCode::DOUBLE});
         break;
     }
+    p->expr_1 = e1Typed;
+    p->expr_2 = e2Typed;
     Return(new ETyped(p, new Bool));
 }
 

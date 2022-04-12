@@ -1,45 +1,48 @@
-#include "TypeChecker.h"
-#include "TypeError.h"
-#include "bnfc/Parser.H"
-#include "bnfc/ParserError.H"
-
+#include "src/Util.h"
+#include "src/CodeGen.h"
+#include "src/Parser.h"
+#include "src/TypeChecker.h"
 #include <iostream>
-#include <memory>
+
+using namespace jlc;
+using namespace jlc::typechecker;
+using namespace jlc::codegen;
+namespace fs = std::filesystem;
 
 int main(int argc, char** argv) {
-    FILE* input;
-    char* filename = nullptr;
+    const char* in = argv[1];
+    FILE* input = readFileOrInput(in);
 
-    filename = argv[1];
+    Parser parser;
 
-    if (filename) {
-        input = fopen(filename, "r");
-        if (!input) {
-            exit(1);
-        }
-    } else
-        input = stdin;
-
-    bnfc::Prog* parse_tree = nullptr;
     try {
-        parse_tree = bnfc::pProg(input);
+        parser.run(input);
     } catch (bnfc::parse_error& e) {
         std::cerr << "ERROR: Parse error on line " << e.getLine() << std::endl;
+        return 1;
+    } catch(std::exception& e) {
+        return 1;
     }
 
-    if (parse_tree) {
-        try {
-            jlc::typechecker::run(parse_tree);
-        } catch (jlc::typechecker::TypeError& e) {
-            std::cerr << e.what() << "\n";
-            return 1;
-        } catch (std::exception& e) {
-            std::cerr << e.what() << "\n";
-            return 1;
-        }
-        std::cerr << "OK" << std::endl;
-        delete parse_tree;
-        return 0;
+    TypeChecker typeChecker;
+
+    try {
+        typeChecker.run(parser.getAST());
+    } catch(TypeError& t) {
+        std::cerr << t.what() << std::endl;
+        return 1;
     }
-    return 1;
+
+    std::cerr << "OK" << std::endl;
+
+    Codegen codegen;
+    // TODO: Use exceptions here too.
+    codegen.run(typeChecker.getAST());
+
+    llvm::Module& m = codegen.getModuleRef();
+    std::string out;
+    llvm::raw_string_ostream outStream(out);
+    m.print(outStream, nullptr);
+    std::cout << out;
+    return 0;
 }

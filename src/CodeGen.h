@@ -64,14 +64,12 @@ class Env {
 
 class Codegen {
   public:
-    using InputType = std::shared_ptr<bnfc::Prog>;
-    using OutputType = std::shared_ptr<llvm::Module>;
 
-    Codegen(const std::string& moduleName) {
+    Codegen(const std::string& moduleName = std::string()) {
         env_ = std::make_unique<Env>();
         context_ = std::make_unique<llvm::LLVMContext>();
         builder_ = std::make_unique<llvm::IRBuilder<>>(*context_);
-        module_ = std::make_shared<llvm::Module>(moduleName, *context_);
+        module_ = std::make_unique<llvm::Module>(moduleName, *context_);
 
         int32 = llvm::Type::getInt32Ty(*context_);
         int8 = llvm::Type::getInt8Ty(*context_);
@@ -88,11 +86,14 @@ class Codegen {
     }
 
     // Entry point of codegen!
-    std::optional<OutputType> run(InputType in) {
-        IntermediateBuilder::Dispatch(in.get(), *this);
+    void run(bnfc::Prog* p) {
+        IntermediateBuilder::Dispatch(p, *this);
         for (auto& fn : module_->functions())
             removeUnreachableCode(fn);
-        return module_;
+    }
+
+    llvm::Module&  getModuleRef() {
+        return *module_;
     }
 
   private:
@@ -228,6 +229,10 @@ class Codegen {
             parent_.builder_->CreateStore(newVal, varPtr);
         }
 
+        void visitEmpty(Empty* p) override {
+
+        }
+
       private:
         inline llvm::BasicBlock* newBasicBlock() {
             return llvm::BasicBlock::Create(*parent_.context_,
@@ -306,6 +311,14 @@ class Codegen {
             Return(BinOpBuilder::Dispatch(p->addop_, parent_, p->expr_1, p->expr_2));
         }
 
+        void visitEAnd(EAnd* p) override {
+            Return(BinOpBuilder::Dispatch(p, parent_, p->expr_1, p->expr_2));
+        }
+
+        void visitEOr(EOr* p) override {
+            Return(BinOpBuilder::Dispatch(p, parent_, p->expr_1, p->expr_2));
+        }
+
         class BinOpBuilder
             : public ValueVisitor<BinOpBuilder, llvm::Value*, Codegen, Expr*, Expr*> {
           public:
@@ -334,11 +347,24 @@ class Codegen {
                 else
                     Return(parent_.builder_->CreateICmpNE(e1_, e2_));
             }
+            void visitGE(GE* p) override {
+                if (e1_->getType() == parent_.doubleTy)
+                    Return(parent_.builder_->CreateFCmpOGE(e1_, e2_));
+                else
+                    Return(parent_.builder_->CreateICmpSGE(e1_, e2_));
+            }
             void visitLTH(LTH* p) override {
                 if (e1_->getType() == parent_.doubleTy)
                     Return(parent_.builder_->CreateFCmpOLT(e1_, e2_));
                 else
                     Return(parent_.builder_->CreateICmpSLT(e1_, e2_));
+            }
+
+            void visitLE(LE* p) override {
+                if (e1_->getType() == parent_.doubleTy)
+                    Return(parent_.builder_->CreateFCmpOLE(e1_, e2_));
+                else
+                    Return(parent_.builder_->CreateICmpSLE(e1_, e2_));
             }
 
             void visitGTH(GTH* p) override {
@@ -485,7 +511,7 @@ class Codegen {
         env_->addSignature(ident, fn);
     }
 
-    // Removes unreachable's and the instructions that follow.
+    // Removes "unreachables" and the instructions that follow.
     // Also removes empty BasicBlocks
     static void removeUnreachableCode(llvm::Function& fn) {
         auto bb = fn.begin();
@@ -504,7 +530,7 @@ class Codegen {
     std::unique_ptr<Env> env_;
     std::unique_ptr<llvm::IRBuilder<>> builder_;
     std::unique_ptr<llvm::LLVMContext> context_;
-    std::shared_ptr<llvm::Module> module_;
+    std::unique_ptr<llvm::Module> module_;
     llvm::Type* int32;
     llvm::Type* int8;
     llvm::Type* int1;

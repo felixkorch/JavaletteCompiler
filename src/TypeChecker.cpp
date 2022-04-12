@@ -4,11 +4,7 @@
 namespace jlc::typechecker {
 
 /********************   Entrypoint for typechecking   ********************/
-Prog* run(Prog* p) {
-    Env env;
-    ProgramChecker::Dispatch(p, env);
-    return p;
-}
+
 /********************   ProgramChecker class   ********************/
 
 void ProgramChecker::visitProgram(Program* p) { Visit(p->listtopdef_); }

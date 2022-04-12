@@ -31,7 +31,7 @@ set(jlc-lib_SOURCE ${bnfc_SOURCE}
     src/CodeGen.h
     src/CodeGen.cpp
     src/Util.h
-    src/Stage.h)
+    src/Parser.h)
 
 find_package(LLVM CONFIG REQUIRED)
 if(VERBOSE)

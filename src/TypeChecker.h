@@ -219,6 +219,22 @@ public:
 };
 
 // Entrypoint for typechecking
-Prog* run(Prog* prg);
+class TypeChecker {
+    Env env_{};
+    Prog* p_ = nullptr;
+  public:
+    void run (Prog* p) {
+        ProgramChecker::Dispatch(p, env_);
+        p_ = p;
+    }
+
+    Env& getEnv() {
+        return env_;
+    }
+
+    Prog* getAST() {
+        return p_;
+    }
+};
 
 }

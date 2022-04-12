@@ -22,8 +22,9 @@ MAKEFILE_DIR := $(dir $(MAKEFILE_LIST))
 LLVM_CXX_FLAGS=$(shell llvm-config --cxxflags)
 LLVM_LD_FLAGS=$(shell llvm-config --ldflags)
 LLVM_LIBS=$(shell llvm-config --libs)
+LLVM_INCLUDES=$(shell llvm-config --includedir)
 
-INCLUDES := -I $(MAKEFILE_DIR) $(MAKEFILE_DIR)/src
+INCLUDES := -I $(MAKEFILE_DIR) -I $(MAKEFILE_DIR)/src -I $(LLVM_INCLUDES)
 LINKS := $(LLVM_CXX_FLAGS) $(LLVM_LD_FLAGS) $(LLVM_LIBS)
 FLAGS := -c -O3 -std=c++17 -Wall $(INCLUDES)
 CC:= g++

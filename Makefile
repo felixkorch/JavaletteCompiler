@@ -32,7 +32,7 @@ CC:= g++
 GRAMMAR_FILE := src/Javalette.cf
 MAKE := make
 BNFC := bnfc
-BNFC_CMD := bnfc -m -l -p bnfc --cpp -o $(GEN_DIR) $(GRAMMAR_FILE)
+BNFC_CMD := bnfc -l -p bnfc --cpp -o $(GEN_DIR) $(GRAMMAR_FILE)
 
 FLAGS_BNFC := --ansi -W -Wall -Wsign-conversion -Wno-unused-parameter -Wno-unused-function -Wno-unneeded-internal-declaration
 FLEX=flex

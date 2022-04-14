@@ -69,3 +69,4 @@ add_executable(${PROJECT_NAME} src/Main.cpp)
 target_link_libraries(${PROJECT_NAME} jlc-lib)
 
 add_subdirectory(sandbox)
+add_subdirectory(test)

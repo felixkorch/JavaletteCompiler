@@ -5,7 +5,6 @@ gen
 jlc
 build
 bin
-tester
 bin-int
 *.mk
 *.project

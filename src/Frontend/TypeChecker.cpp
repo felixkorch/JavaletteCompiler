@@ -1,9 +1,7 @@
 #include "TypeChecker.h"
 #include "TypeError.h"
-#include "Util.h"
+#include "src/Common/Util.h"
 namespace jlc::typechecker {
-
-/********************   Entrypoint for typechecking   ********************/
 
 /********************   ProgramChecker class   ********************/
 
@@ -25,18 +23,17 @@ void ProgramChecker::visitListTopDef(ListTopDef* p) {
     env_.findFn("main", 1, 1);
 
     // Check all the functions one by one
+    FunctionChecker functionChecker(env_);
     for (TopDef* fn : *p)
-        FunctionChecker::Dispatch(fn, env_);
+        functionChecker.Visit(fn);
 }
 
 void ProgramChecker::visitFnDef(FnDef* p) {
-    TypeCode returnType = TypeCoder::Dispatch(p->type_);
-
     std::list<TypeCode> args;
-    for (Arg* it : *p->listarg_)
-        args.push_back(TypeCoder::Dispatch(it));
+    for (Arg* arg : *p->listarg_)
+        args.push_back(typecode(arg));
 
-    env_.addSignature(p->ident_, {args, returnType});
+    env_.addSignature(p->ident_, {args, typecode(p->type_)});
 }
 
 /********************   FunctionChecker class    ********************/
@@ -50,7 +47,8 @@ void FunctionChecker::visitFnDef(FnDef* p) {
 }
 
 void FunctionChecker::visitBlock(Block* p) {
-    StatementChecker::Dispatch(p->liststmt_, env_);
+    StatementChecker stmtChecker(env_);
+    stmtChecker.Visit(p->liststmt_);
 }
 
 void FunctionChecker::visitListArg(ListArg* p) {
@@ -60,11 +58,24 @@ void FunctionChecker::visitListArg(ListArg* p) {
 
 void FunctionChecker::visitArgument(Argument* p) {
     // Each argument gets added to the env before StatementChecker takes over.
-    TypeCode argType = TypeCoder::Dispatch(p->type_);
-    env_.addVar(p->ident_, argType);
+    env_.addVar(p->ident_, typecode(p->type_));
 }
 
 /********************   StatementChecker class    ********************/
+
+void StatementChecker::visitListStmt(ListStmt* p) {
+    // Entrypoint for checking a sequence of statements
+    currentFn_ = env_.getCurrentFunction();
+    for (Stmt* stmt : *p)
+        Visit(stmt);
+
+    // Check that non-void functions always return
+    ReturnChecker returnChecker(env_);
+    bool returns = returnChecker.Visit(p);
+    if (!returns && currentFn_.type.ret != TypeCode::VOID)
+        throw TypeError("Non-void function " + currentFn_.name +
+                        " has to always return a value");
+}
 
 void StatementChecker::visitBStmt(BStmt* p) {
     env_.enterScope();
@@ -91,10 +102,9 @@ void StatementChecker::visitIncr(Incr* p) {
 }
 
 void StatementChecker::visitCond(Cond* p) {
-    ETyped* exprTyped = TypeInferrer::Dispatch(p->expr_, env_);
-    TypeCode exprType = TypeCoder::Dispatch(exprTyped->type_);
-    if (exprType != TypeCode::BOOLEAN) {
-        throw TypeError("Expected boolean in cond, got " + toString(exprType),
+    ETyped* exprTyped = infer(p->expr_, env_);
+    if (typecode(exprTyped) != TypeCode::BOOLEAN) {
+        throw TypeError("Expected boolean in cond, got " + toString(exprTyped),
                         p->line_number, p->char_number);
     }
 
@@ -103,10 +113,9 @@ void StatementChecker::visitCond(Cond* p) {
 }
 
 void StatementChecker::visitCondElse(CondElse* p) {
-    ETyped* exprTyped = TypeInferrer::Dispatch(p->expr_, env_);
-    TypeCode exprType = TypeCoder::Dispatch(exprTyped->type_);
-    if (exprType != TypeCode::BOOLEAN) {
-        throw TypeError("Expected boolean in cond, got " + toString(exprType),
+    ETyped* exprTyped = infer(p->expr_, env_);
+    if (typecode(exprTyped) != TypeCode::BOOLEAN) {
+        throw TypeError("Expected boolean in cond, got " + toString(exprTyped),
                         p->line_number, p->char_number);
     }
 
@@ -116,11 +125,10 @@ void StatementChecker::visitCondElse(CondElse* p) {
 }
 
 void StatementChecker::visitWhile(While* p) {
-    ETyped* exprTyped = TypeInferrer::Dispatch(p->expr_, env_);
-    TypeCode exprType = TypeCoder::Dispatch(exprTyped->type_);
+    ETyped* exprTyped = infer(p->expr_, env_);
 
-    if (exprType != TypeCode::BOOLEAN) {
-        throw TypeError("Expected boolean in cond, got " + toString(exprType),
+    if (typecode(exprTyped) != TypeCode::BOOLEAN) {
+        throw TypeError("Expected boolean in cond, got " + toString(exprTyped),
                         p->line_number, p->char_number);
     }
 
@@ -133,39 +141,30 @@ void StatementChecker::visitBlock(Block* p) {
         Visit(stmt);
 }
 
-void StatementChecker::visitDecl(Decl* p) { DeclHandler::Dispatch(p, env_); }
-
-void StatementChecker::visitListStmt(ListStmt* p) {
-    // Entrypoint for checking a sequence of statements
-    currentFn_ = env_.getCurrentFunction();
-    for (Stmt* stmt : *p)
-        Visit(stmt);
-    if (!ReturnChecker::Dispatch(p, env_) && currentFn_.type.ret != TypeCode::VOID)
-        throw TypeError("Non-void function " + currentFn_.name +
-                        " has to always return a value");
+void StatementChecker::visitDecl(Decl* p) {
+    DeclHandler decl(env_);
+    decl.Visit(p);
 }
 
 void StatementChecker::visitAss(Ass* p) {
     TypeCode assignType = env_.findVar(p->ident_, p->line_number, p->char_number);
-    ETyped* exprTyped = TypeInferrer::Dispatch(p->expr_, env_);
-    TypeCode exprType = TypeCoder::Dispatch(exprTyped->type_);
+    ETyped* exprTyped = infer(p->expr_, env_);
 
-    if (assignType != exprType) {
-        throw TypeError(env_.Print(p->expr_) + " has type " + toString(exprType) +
-                            ", expected " + toString(assignType) + " for variable " +
-                            p->ident_,
+    if (assignType != typecode(exprTyped)) {
+        throw TypeError(env_.Print(p->expr_) + " has type " +
+                            toString(exprTyped) + ", expected " +
+                            toString(assignType) + " for variable " + p->ident_,
                         p->line_number, p->char_number);
     }
     p->expr_ = exprTyped;
 }
 
 void StatementChecker::visitRet(Ret* p) {
-    ETyped* exprTyped = TypeInferrer::Dispatch(p->expr_, env_);
-    TypeCode exprType = TypeCoder::Dispatch(exprTyped->type_);
-    if (exprType != currentFn_.type.ret) {
+    ETyped* exprTyped = infer(p->expr_, env_);
+    if (typecode(exprTyped) != currentFn_.type.ret) {
         throw TypeError("Expected return type for function " + currentFn_.name + " is " +
                             toString(currentFn_.type.ret) + ", but got " +
-                            toString(exprType),
+                            toString(exprTyped),
                         p->line_number, p->char_number);
     }
     p->expr_ = exprTyped;
@@ -182,9 +181,8 @@ void StatementChecker::visitVRet(VRet* p) {
 
 void StatementChecker::visitSExp(SExp* p) {
     // e.g. printString("hello");
-    ETyped* exprTyped = TypeInferrer::Dispatch(p->expr_, env_);
-    TypeCode exprType = TypeCoder::Dispatch(exprTyped->type_);
-    if (exprType != TypeCode::VOID)
+    ETyped* exprTyped = infer(p->expr_, env_);
+    if (typecode(exprTyped) != TypeCode::VOID)
         throw TypeError("Expression should be of type void", p->line_number,
                         p->char_number);
     p->expr_ = exprTyped;
@@ -226,15 +224,14 @@ void ReturnChecker::visitListStmt(ListStmt* p) {
         Visit(stmt);
 }
 void ReturnChecker::visitCondElse(CondElse* p) {
-    if (ReturnChecker::Dispatch(p->stmt_1, env_) &&
-        ReturnChecker::Dispatch(p->stmt_2, env_))
+    if (Visit(p->stmt_1) && Visit(p->stmt_2))
         Return(true);
 }
 
-/********************   DeclBuilder class    ********************/
+/********************   DeclHandler class    ********************/
 
 void DeclHandler::visitDecl(Decl* p) {
-    t = TypeCoder::Dispatch(p->type_);
+    t = typecode(p->type_);
     Visit(p->listitem_);
 }
 
@@ -245,11 +242,10 @@ void DeclHandler::visitListItem(ListItem* p) {
 
 void DeclHandler::visitInit(Init* p) {
     env_.addVar(p->ident_, t);
-    ETyped* exprTyped = TypeInferrer::Dispatch(p->expr_, env_);
-    TypeCode exprType = TypeCoder::Dispatch(exprTyped->type_);
-    if (t != exprType) {
+    ETyped* exprTyped = infer(p->expr_, env_);
+    if (t != typecode(exprTyped)) {
         throw TypeError("expected type is " + toString(t) + ", but got " +
-                            toString(exprType),
+                            toString(exprTyped),
                         p->expr_->line_number, p->expr_->char_number);
     }
     p->expr_ = exprTyped;
@@ -269,19 +265,18 @@ bool TypeInferrer::typeIn(TypeCode t, std::initializer_list<TypeCode> list) {
 // Could be arithmetic / relative
 auto TypeInferrer::checkBinExp(Expr* e1, Expr* e2, const std::string& op,
                                std::initializer_list<TypeCode> allowedTypes) {
-    ETyped* e1Typed = TypeInferrer::Dispatch(e1, env_);
-    ETyped* e2Typed = TypeInferrer::Dispatch(e2, env_);
-    TypeCode e1Type = TypeCoder::Dispatch(e1Typed->type_);
-    TypeCode e2Type = TypeCoder::Dispatch(e2Typed->type_);
+    ETyped* e1Typed = Visit(e1);
+    ETyped* e2Typed = Visit(e2);
 
-    if (!typeIn(e1Type, allowedTypes) || !typeIn(e2Type, allowedTypes)) {
-        throw TypeError("Invalid operands of types " + toString(e1Type) + " and " +
-                            toString(e2Type) + " to binary " + op,
+    if (!typeIn(typecode(e1Typed), allowedTypes) ||
+        !typeIn(typecode(e2Typed), allowedTypes)) {
+        throw TypeError("Invalid operands of types " + toString(e1Typed) +
+                            " and " + toString(e2Typed) + " to binary " + op,
                         e1->line_number, e1->char_number);
     }
-    if (e1Type != e2Type) {
-        throw TypeError("Incompatible operands of types " + toString(e1Type) + " and " +
-                            toString(e2Type) + " to binary " + op,
+    if (typecode(e1Typed) != typecode(e2Typed)) {
+        throw TypeError("Incompatible operands of types " + toString(e1Typed) +
+                            " and " + toString(e2Typed) + " to binary " + op,
                         e1->line_number, e1->char_number);
     }
     return std::pair(e1Typed, e2Typed);
@@ -289,12 +284,11 @@ auto TypeInferrer::checkBinExp(Expr* e1, Expr* e2, const std::string& op,
 
 auto TypeInferrer::checkUnExp(Expr* e, const std::string& op,
                               std::initializer_list<TypeCode> allowedTypes) {
-    ETyped* eTyped = TypeInferrer::Dispatch(e, env_);
-    TypeCode eTypeCode = TypeCoder::Dispatch(eTyped->type_);
+    ETyped* eTyped = Visit(e);
 
-    if (!typeIn(eTypeCode, allowedTypes)) {
-        throw TypeError("Invalid operand of type " + toString(eTypeCode) + " to unary " +
-                            op,
+    if (!typeIn(typecode(eTyped), allowedTypes)) {
+        throw TypeError("Invalid operand of type " + toString(eTyped) +
+                            " to unary " + op,
                         e->line_number, e->char_number);
     }
     return eTyped;
@@ -319,7 +313,7 @@ void TypeInferrer::visitListItem(ListItem* p) {
 // Plus  (INT, DOUBLE)
 // Minus (INT, DOUBLE)
 void TypeInferrer::visitEAdd(EAdd* p) {
-    OpCode addOpCode = OpCoder::Dispatch(p->addop_);
+    OpCode addOpCode = opcode(p->addop_);
     auto [e1Typed, e2Typed] = checkBinExp(p->expr_1, p->expr_2, toString(addOpCode),
                                           {TypeCode::INT, TypeCode::DOUBLE});
     p->expr_1 = e1Typed;
@@ -330,7 +324,7 @@ void TypeInferrer::visitEAdd(EAdd* p) {
 // Times, Div (INT, DOUBLE)
 // Mod        (INT)
 void TypeInferrer::visitEMul(EMul* p) {
-    OpCode mulOpCode = OpCoder::Dispatch(p->mulop_);
+    OpCode mulOpCode = opcode(p->mulop_);
     auto [e1Typed, e2Typed] =
         mulOpCode == OpCode::MOD
             ? checkBinExp(p->expr_1, p->expr_2, toString(mulOpCode), {TypeCode::INT})
@@ -377,21 +371,19 @@ void TypeInferrer::visitNeg(Neg* p) {
 // LTH, LE, GTH, GE (INT, DOUBLE)
 // EQU, NE          (INT, DOUBLE, BOOLEAN)
 void TypeInferrer::visitERel(ERel* p) {
-    OpCode opc = OpCoder::Dispatch(p->relop_);
+    OpCode opc = opcode(p->relop_);
     ETyped* e1Typed;
     ETyped* e2Typed;
-    switch (opc) {
-    case OpCode::EQU:
-    case OpCode::NE:
+
+    if (opc == OpCode::EQU || opc == OpCode::NE) {
         std::tie(e1Typed, e2Typed) =
             checkBinExp(p->expr_1, p->expr_2, toString(opc),
                         {TypeCode::BOOLEAN, TypeCode::INT, TypeCode::DOUBLE});
-        break;
-    default:
+    } else {
         std::tie(e1Typed, e2Typed) = checkBinExp(p->expr_1, p->expr_2, toString(opc),
                                                  {TypeCode::INT, TypeCode::DOUBLE});
-        break;
     }
+
     p->expr_1 = e1Typed;
     p->expr_2 = e2Typed;
     Return(new ETyped(p, new Bool));
@@ -410,11 +402,11 @@ void TypeInferrer::visitEApp(EApp* p) {
         p->listexpr_->begin(), p->listexpr_->end(), argTypes.begin(), argTypes.end()};
 
     for (; item != itemEnd && argType != argEnd; ++item, ++argType) {
-        ETyped* itemTyped = TypeInferrer::Dispatch(*item, env_);
-        TypeCode itemType = TypeCoder::Dispatch(itemTyped->type_);
-        if (itemType != *argType) {
+        ETyped* itemTyped = infer(*item, env_);
+        if (typecode(itemTyped) != *argType) {
             throw TypeError("In call to fn " + p->ident_ + ", expected arg " +
-                                toString(*argType) + ", but got " + toString(itemType),
+                                toString(*argType) + ", but got " +
+                                toString(typecode(itemTyped)),
                             p->line_number, p->char_number);
         }
         *item = itemTyped;
@@ -461,7 +453,7 @@ void Env::addVar(const std::string& name, TypeCode t) {
         throw TypeError("Duplicate variable '" + name + "' in scope");
 }
 
-/********************   Other functions    ********************/
+/********************   Helper functions    ********************/
 
 std::string toString(TypeCode t) {
     switch (t) {
@@ -472,6 +464,10 @@ std::string toString(TypeCode t) {
     case TypeCode::STRING: return "string";
     default: return "errorType";
     }
+}
+
+std::string toString(ETyped* p) {
+    return toString(typecode(p));
 }
 
 std::string toString(OpCode c) {
@@ -504,6 +500,21 @@ Type* newType(TypeCode t) {
     case TypeCode::STRING: return new StringLit;
     default: return new Void;
     }
+}
+
+TypeCode typecode(Visitable* p) {
+    TypeCoder typeCoder;
+    return typeCoder.Visit(p);
+}
+
+OpCode opcode(Visitable* p) {
+    OpCoder opCoder;
+    return opCoder.Visit(p);
+}
+
+ETyped* infer(Visitable* p, Env& env) {
+    TypeInferrer inf(env);
+    return inf.Visit(p);
 }
 
 } // namespace jlc::typechecker

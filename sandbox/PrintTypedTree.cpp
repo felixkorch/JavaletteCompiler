@@ -1,8 +1,7 @@
 #include "bnfc/ParserError.H"
 #include "bnfc/Parser.H"
-#include "src/TypeChecker.h"
-#include "src/TypeError.h"
-
+#include "src/Frontend/TypeChecker.h"
+#include "src/Frontend/TypeError.h"
 
 int main(int argc, char ** argv)
 {

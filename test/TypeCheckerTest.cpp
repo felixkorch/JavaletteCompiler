@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
-#include "src/Util.h"
-#include "src/CodeGen.h"
-#include "src/Parser.h"
-#include "src/TypeChecker.h"
+#include "src/Common/Util.h"
+#include "src/LLVM-Backend/CodeGen.h"
+#include "src/Frontend/Parser.h"
+#include "src/Frontend/TypeChecker.h"
 #include <iostream>
 
 using namespace jlc;
@@ -514,7 +514,7 @@ TEST(TypeChecker, ReturnsAnnotatedTree) {
     });
 
     TypeCheckerVisitor vis;
-    bnfc::Prog *prog = typeChecker.getAST();
+    bnfc::Prog *prog = typeChecker.getAbsyn();
     prog->accept(&vis);
 
     delete prog;

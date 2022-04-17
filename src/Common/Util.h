@@ -3,7 +3,7 @@
 #include <optional>
 #include <vector>
 #include <unordered_map>
-#include <stdio.h>
+#include <cstdio>
 
 namespace jlc {
 

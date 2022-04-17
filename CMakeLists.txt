@@ -23,15 +23,23 @@ set(bnfc_SOURCE
 )
 
 set(jlc-lib_SOURCE ${bnfc_SOURCE}
-    src/BaseVisitor.cpp
-    src/BaseVisitor.h
-    src/TypeChecker.cpp
-    src/TypeChecker.h
-    src/TypeError.h
-    src/CodeGen.h
-    src/CodeGen.cpp
-    src/Util.h
-    src/Parser.h)
+        src/Common/BaseVisitor.cpp
+        src/Common/BaseVisitor.h
+        src/Frontend/TypeChecker.cpp
+        src/Frontend/TypeChecker.h
+        src/Frontend/TypeError.h
+        src/LLVM-Backend/CodeGen.h
+        src/LLVM-Backend/CodeGen.cpp
+        src/LLVM-Backend/BinOpBuilder.cpp
+        src/LLVM-Backend/BinOpBuilder.h
+        src/LLVM-Backend/CodegenEnv.cpp
+        src/LLVM-Backend/CodegenEnv.h
+        src/LLVM-Backend/ExpBuilder.cpp
+        src/LLVM-Backend/ExpBuilder.h
+        src/LLVM-Backend/IntermediateBuilder.cpp
+        src/LLVM-Backend/IntermediateBuilder.h
+        src/Common/Util.h
+        src/Frontend/Parser.h)
 
 find_package(LLVM CONFIG REQUIRED)
 if(VERBOSE)

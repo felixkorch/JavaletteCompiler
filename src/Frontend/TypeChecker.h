@@ -2,7 +2,7 @@
 #include "bnfc/Absyn.H"
 #include "bnfc/Printer.H"
 #include "TypeError.h"
-#include "BaseVisitor.h"
+#include "src/Common/BaseVisitor.h"
 #include <unordered_map>
 #include <algorithm>
 #include <list>
@@ -23,10 +23,6 @@ enum class OpCode {
     AND, OR, NOT, NEG           // Other
 };
 
-std::string toString(TypeCode t);
-std::string toString(OpCode c);
-Type* newType(TypeCode t);
-
 struct FunctionType {
     std::list<TypeCode> args;
     TypeCode ret;
@@ -37,9 +33,8 @@ struct Signature {
     FunctionType type;
 };
 
-using Scope = std::unordered_map<std::string, TypeCode>; // Map of (Var -> Type)
-
 class Env {
+    using Scope = std::unordered_map<std::string, TypeCode>; // Map of (Var -> Type)
     // Defines the environment of the program
     std::list<Scope> scopes_;
     std::unordered_map<std::string, FunctionType> signatures_;
@@ -47,12 +42,12 @@ class Env {
 
     /* Not related to the semantics of the type-checker, just for passing around a printing object. */
     std::unique_ptr<PrintAbsyn> printer_;
-public:
+  public:
     Env()
-    : scopes_()
-    , signatures_()
-    , currentFn_()
-    , printer_(new PrintAbsyn()) {}
+        : scopes_()
+          , signatures_()
+          , currentFn_()
+          , printer_(new PrintAbsyn()) {}
 
     void enterScope();
     void exitScope();
@@ -75,6 +70,14 @@ public:
     inline std::string Print(Visitable* v) { return printer_->print(v); }
 
 };
+
+std::string toString(TypeCode t);
+std::string toString(ETyped* p);
+std::string toString(OpCode c);
+Type* newType(TypeCode t);
+TypeCode typecode(Visitable* p);
+OpCode opcode(Visitable* p);
+ETyped* infer(Visitable* p, Env& env);
 
 //  Returns the OpCode for an Operation
 class OpCoder : public ValueVisitor<OpCoder, OpCode> {
@@ -100,7 +103,8 @@ public:
     void visitBool(Bool *p) override { Return(TypeCode::BOOLEAN); }
     void visitVoid(Void *p) override { Return(TypeCode::VOID); }
     void visitStringLit(StringLit *p) override { Return(TypeCode::STRING); }
-    void visitArgument(Argument *p) override { p->type_->accept(this); }
+    void visitArgument(Argument *p) override { Return(Visit(p->type_)); }
+    void visitETyped(ETyped *p) override { Return(Visit(p->type_)); }
 };
 
 // Returns an annotated version of the expression and
@@ -224,7 +228,8 @@ class TypeChecker {
     Prog* p_ = nullptr;
   public:
     void run (Prog* p) {
-        ProgramChecker::Dispatch(p, env_);
+        ProgramChecker programChecker(env_);
+        programChecker.Visit(p);
         p_ = p;
     }
 
@@ -232,7 +237,7 @@ class TypeChecker {
         return env_;
     }
 
-    Prog* getAST() {
+    Prog* getAbsyn() {
         return p_;
     }
 };

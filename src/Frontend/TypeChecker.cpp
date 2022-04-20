@@ -224,7 +224,9 @@ void ReturnChecker::visitListStmt(ListStmt* p) {
         Visit(stmt);
 }
 void ReturnChecker::visitCondElse(CondElse* p) {
-    if (Visit(p->stmt_1) && Visit(p->stmt_2))
+    ReturnChecker checkIf(env_);
+    ReturnChecker checkElse(env_);
+    if (checkIf.Visit(p->stmt_1) && checkElse.Visit(p->stmt_2))
         Return(true);
 }
 

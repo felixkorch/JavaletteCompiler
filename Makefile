@@ -1,12 +1,13 @@
 MAKEFLAGS := --jobs=$(shell nproc)
 OBJ_DIR = build
+ALL_OBJ_DIRS = build build/Frontend build/LLVM-Backend build/X86-Backend build/Common
 SRC_DIR = src
 GEN_DIR = bnfc
 BIN_DIR = .
 
 MAIN_SRC = $(SRC_DIR)/Main.cpp
-COMMON_SRC := $(filter-out $(MAIN_SRC), $(wildcard $(SRC_DIR)/*.cpp))
-HEADERS := $(wildcard $(SRC_DIR)/*.h)
+COMMON_SRC := $(filter-out $(MAIN_SRC), $(wildcard $(SRC_DIR)/**/*.cpp))
+HEADERS := $(wildcard $(SRC_DIR)/**/*.h)
 
 GEN_SRC := $(addprefix $(GEN_DIR)/, Absyn.C Absyn.H Buffer.C Buffer.H Javalette.l Javalette.y\
 Parser.H ParserError.H Printer.H Printer.C Test.C)
@@ -29,7 +30,7 @@ LINKS := $(LLVM_CXX_FLAGS) $(LLVM_LD_FLAGS) $(LLVM_LIBS)
 FLAGS := -c -O3 -std=c++17 -Wall $(INCLUDES)
 CC:= g++
 
-GRAMMAR_FILE := src/Javalette.cf
+GRAMMAR_FILE := src/Frontend/Javalette.cf
 MAKE := make
 BNFC := bnfc
 BNFC_CMD := bnfc -l -p bnfc --cpp -o $(GEN_DIR) $(GRAMMAR_FILE)
@@ -57,12 +58,12 @@ $(GEN_SRC)&:
 	$(BNFC_CMD)
 
 cpbisonfile: $(GEN_DIR)/Javalette.y
-	cp -f src/Javalette.y bnfc/
+	cp -f src/Frontend/Javalette.y bnfc/
 
 $(OBJ): | $(OBJ_DIR)
 
 $(OBJ_DIR):
-	mkdir $(OBJ_DIR)
+	mkdir $(ALL_OBJ_DIRS)
 
 $(BIN_DIR):
 	mkdir $(BIN_DIR)

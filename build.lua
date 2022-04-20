@@ -1,7 +1,7 @@
 
 function gen()
-    os.execute("bnfc -l -p bnfc --cpp -o bnfc src/Javalette.cf && cp -f src/Javalette.y bnfc/")
-    os.execute("bnfc --latex -o bnfc src/Javalette.cf")
+    os.execute("bnfc -l -p bnfc --cpp -o bnfc src/Frontend/Javalette.cf && cp -f src/Frontend/Javalette.y bnfc/")
+    os.execute("bnfc --latex -o bnfc src/Frontend/Javalette.cf")
     os.execute("flex -Pjavalette_ -o bnfc/Lexer.C bnfc/Javalette.l")
     os.execute("bison -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C")
 end

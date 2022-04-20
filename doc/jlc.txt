@@ -4,6 +4,7 @@ Description of the Javalette language is depicted in the included "Javalette.tex
 Implemented features so far:
 * Parsing
 * Type-checking
+* LLVM-Backend
 
 Prerequisites:
 -------------------------------------------------------------
@@ -11,6 +12,8 @@ Prerequisites:
 - flex (>=2.6.4)
 - bnfc (tested with v2.9.4)
 - g++/clang++ with C++17 support
+- llvm & llvm-dev packages (available from all pkg-managers)
+- python3 (only for testing)
 
 Build instructions:
 Produces (in root): 'jlc' (the compiler)

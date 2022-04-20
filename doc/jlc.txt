@@ -33,6 +33,7 @@ Usage (from root):
 * A parser-error will print: "ERROR: Parse error on line x"
 * The compiler will then attempt to run the typechecking module, which on failed attempt will print
 the corresponding error to std err prepended with 'ERROR:' On success, "OK" will be printed to std err.
+* If type-checking succeeds, the compiler will compile the program to LLVM IR and stream it to std-out.
 
 
 Parsing conflicts:

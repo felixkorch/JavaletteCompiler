@@ -38,6 +38,12 @@ set(jlc-lib_SOURCE ${bnfc_SOURCE}
         src/LLVM-Backend/ExpBuilder.h
         src/LLVM-Backend/IntermediateBuilder.cpp
         src/LLVM-Backend/IntermediateBuilder.h
+        src/X86-Backend/Expander.h
+        src/X86-Backend/Expander.cpp
+        src/X86-Backend/Emitter.cpp
+        src/X86-Backend/Emitter.h
+        src/X86-Backend/RegAllocator.cpp
+        src/X86-Backend/RegAllocator.h
         src/Common/Util.h
         src/Frontend/Parser.h)
 

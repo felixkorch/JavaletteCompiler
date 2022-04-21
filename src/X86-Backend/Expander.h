@@ -6,6 +6,37 @@
 
 namespace jlc::x86 {
 
+class X86SpecialReg;
+class X86IntPtr;
+class X86StringLit;
+class X86DoublePtr;
+class X86GlobalVar;
+class X86IntConstant;
+class X86Int;
+class X86Double;
+class X86DoubleConstant;
+class X86Instruction;
+
+class Visitor {
+  public:
+    virtual void visitX86SpecialReg(X86SpecialReg* p) = 0;
+    virtual void visitX86IntPtr(X86IntPtr* p) = 0;
+    virtual void visitX86StringLit(X86StringLit* p) = 0;
+    virtual void visitX86DoublePtr(X86DoublePtr* p) = 0;
+    virtual void visitX86GlobalVar(X86GlobalVar* p) = 0;
+    virtual void visitX86IntConstant(X86IntConstant* p) = 0;
+    virtual void visitX86Int(X86Int* p) = 0;
+    virtual void visitX86Double(X86Double* p) = 0;
+    virtual void visitX86DoubleConstant(X86DoubleConstant* p) = 0;
+    virtual void visitX86Instruction(X86Instruction* p) = 0;
+};
+
+class Visitable {
+  public:
+    virtual ~Visitable() {}
+    virtual void accept(Visitor* v) = 0;
+};
+
 enum class X86ValueType {
     GLOBAL_VAR,
     INT_CONSTANT,
@@ -26,66 +57,65 @@ enum X86Reg { eax = 0, ebx, ecx, edx, esp, ebp, esi, edi };
 static const char* X86RegNames[] = {"eax", "ebx", "ecx", "edx",
                                     "esp", "ebp", "esi", "edi"};
 
-struct X86Value {
+struct X86Value : public Visitable {
     virtual ~X86Value() = default;
     virtual X86ValueType getType() = 0;
-    virtual const char* getName() = 0;
 };
 
 struct X86SpecialReg : public X86Value {
     X86Reg reg;
     X86SpecialReg(X86Reg sReg) : reg(sReg) {}
     X86ValueType getType() override { return X86ValueType::SPECIAL_REG; }
-    const char* getName() override { return "Special Reg"; }
+    void accept(Visitor* v) override { v->visitX86SpecialReg(this); }
 };
 
 struct X86IntPtr : public X86Value {
     X86ValueType getType() override { return X86ValueType::INT_PTR; }
-    const char* getName() override { return "Int32 Ptr"; }
+    void accept(Visitor* v) override { v->visitX86IntPtr(this); }
 };
 
 struct X86StringLit : public X86Value {
     std::string value;
     X86StringLit(llvm::StringRef val) : value(val) {}
     X86ValueType getType() override { return X86ValueType::STRING_LIT; }
-    const char* getName() override { return "String Literal"; }
+    void accept(Visitor* v) override { v->visitX86StringLit(this); }
 };
 
 struct X86DoublePtr : public X86Value {
     X86ValueType getType() override { return X86ValueType::DOUBLE_PTR; }
-    const char* getName() override { return "Double Ptr"; }
+    void accept(Visitor* v) override { v->visitX86DoublePtr(this); }
 };
 
 struct X86GlobalVar : public X86Value {
     std::string name;
     X86Value* pointingTo;
     X86ValueType getType() override { return X86ValueType::GLOBAL_VAR; }
-    const char* getName() override { return "Global Var"; }
     ~X86GlobalVar() { delete pointingTo; }
+    void accept(Visitor* v) override { v->visitX86GlobalVar(this); }
 };
 
 struct X86IntConstant : public X86Value {
     int value;
     X86IntConstant(int num) : value(num) {}
     X86ValueType getType() override { return X86ValueType::INT_CONSTANT; }
-    const char* getName() override { return "Int32 Constant"; }
+    void accept(Visitor* v) override { v->visitX86IntConstant(this); }
 };
 
 struct X86Int : public X86Value {
     X86ValueType getType() override { return X86ValueType::INT; }
-    const char* getName() override { return "Int32"; }
+    void accept(Visitor* v) override { v->visitX86Int(this); }
 };
 
 struct X86Double : public X86Value {
     X86ValueType getType() override { return X86ValueType::DOUBLE; }
-    const char* getName() override { return "Double"; }
+    void accept(Visitor* v) override { v->visitX86Double(this); }
 };
 
 struct X86DoubleConstant : public X86Value {
     double value;
     X86DoubleConstant(double num) : value(num) {}
     X86ValueType getType() override { return X86ValueType::DOUBLE_CONSTANT; }
-    const char* getName() override { return "Double Constant"; }
+    void accept(Visitor* v) override { v->visitX86DoubleConstant(this); }
 };
 
 struct X86Instruction : public X86Value {
@@ -95,8 +125,9 @@ struct X86Instruction : public X86Value {
     X86Instruction(int id) : n(id) {}
     virtual ~X86Instruction() {}
     X86ValueType getType() override { return X86ValueType::INSTRUCTION; }
-    const char* getName() override { return "Instruction"; }
+    virtual const char* getName() = 0;
     virtual std::vector<X86Value*> operands() = 0;
+    void accept(Visitor* v) override { v->visitX86Instruction(this); }
 };
 
 struct X86Block {
@@ -141,15 +172,18 @@ struct Add : public X86Instruction {
     X86Value *left, *right;
     Add(int id) : X86Instruction(id) {}
     std::vector<X86Value*> operands() override { return {left, right}; };
-    const char* getName() override { return "ADD"; }
+    const char* getName() override { return "Add"; }
 };
 
 // Move between regs / memory
 struct Mov : public X86Instruction {
-    X86Value *from, *to;
+    X86Value *from = nullptr, *to = nullptr;
     Mov(int id) : X86Instruction(id) {}
-    std::vector<X86Value*> operands() override { return {from, to}; };
-    const char* getName() override { return "MOV"; }
+    std::vector<X86Value*> operands() override {
+        return (to == nullptr) ? std::vector<X86Value*>{from}
+                               : std::vector<X86Value*>{from, to};
+    };
+    const char* getName() override { return "Mov"; }
 };
 
 // Push to stack
@@ -157,14 +191,14 @@ struct Push : public X86Instruction {
     X86Value* target;
     Push(int id) : X86Instruction(id) {}
     std::vector<X86Value*> operands() override { return {target}; };
-    const char* getName() override { return "PUSH"; }
+    const char* getName() override { return "Push"; }
 };
 
 // Pop from stack
 struct Pop : public X86Instruction {
     Pop(int id) : X86Instruction(id) {}
     std::vector<X86Value*> operands() override { return {}; };
-    const char* getName() override { return "POP"; }
+    const char* getName() override { return "Pop"; }
 };
 
 // Push addr of next instr, then execute function
@@ -173,13 +207,14 @@ struct Call : public X86Instruction {
     X86Function* target = nullptr;
     Call(int id) : X86Instruction(id) {}
     std::vector<X86Value*> operands() override { return args; };
-    const char* getName() override { return "CALL"; }
+    const char* getName() override { return "Call"; }
 };
 
 // Return void
 struct VoidRet : public X86Instruction {
     VoidRet(int id) : X86Instruction(id) {}
-    const char* getName() override { return "VRET"; }
+    std::vector<X86Value*> operands() override { return {}; };
+    const char* getName() override { return "Void-Return"; }
 };
 
 // Return value
@@ -187,31 +222,45 @@ struct ValueRet : public X86Instruction {
     X86Value* returnVal;
     ValueRet(int id) : X86Instruction(id) {}
     std::vector<X86Value*> operands() override { return {returnVal}; };
-    const char* getName() override { return "RET"; }
+    const char* getName() override { return "Return"; }
+};
+
+// Used in reg-allocation
+struct PseudoPHI : public X86Instruction {
+    PseudoPHI(int id) : X86Instruction(id) {}
+    std::vector<X86Value*> operands() override { return {}; };
+    const char* getName() override { return "Pseudo-PHI"; }
 };
 
 class Expander {
     std::shared_ptr<X86Program> x86Program_;
     llvm::Module& m_;
     llvm::LLVMContext& c_;
-    int currentN_;
+    int uniqueID_;
+
+    // These maps llvm domain -> X86 domain
+    // Necessary for the expand-phase.
     std::unordered_map<llvm::Value*, X86Value*> valueMap_;
     std::unordered_map<llvm::Value*, X86GlobalVar*> globalMap_;
     std::unordered_map<llvm::Value*, X86Function*> functionMap_;
     std::unordered_map<llvm::Value*, X86Block*> blockMap_;
 
-    X86Instruction* visitCall(const llvm::CallInst& i);
-    X86Instruction* visitAlloca(const llvm::AllocaInst& i);
-    X86Instruction* visitStore(const llvm::StoreInst& i);
-    X86Instruction* visitLoad(const llvm::LoadInst& i);
-    X86Instruction* visitICmp(const llvm::ICmpInst& i);
-    X86Instruction* visitBr(const llvm::BranchInst& i);
-    X86Instruction* visitXor(const llvm::BinaryOperator& i);
-    X86Instruction* visitRet(const llvm::ReturnInst& i);
-    X86Instruction* visitPHI(const llvm::PHINode& i);
+    void visitCall(const llvm::CallInst& i, X86Block* b);
+    void visitAlloca(const llvm::AllocaInst& i, X86Block* b);
+    void visitStore(const llvm::StoreInst& i, X86Block* b);
+    void visitLoad(const llvm::LoadInst& i, X86Block* b);
+    void visitICmp(const llvm::ICmpInst& i, X86Block* b);
+    void visitBr(const llvm::BranchInst& i, X86Block* b);
+    void visitXor(const llvm::BinaryOperator& i, X86Block* b);
+    void visitRet(const llvm::ReturnInst& i, X86Block* b);
+    void visitPHI(const llvm::PHINode& i, X86Block* b);
+    void visitAdd(const llvm::BinaryOperator& i, X86Block* b);
 
-    X86Instruction* buildInstruction(llvm::Instruction& i);
-    X86ValueType convertType(llvm::Value* a);
+    void buildInstruction(llvm::Instruction& i, X86Block* b);
+    X86ValueType convertType(llvm::Value* v);
+    X86Value* getIfConstant(llvm::Value* v);
+    int getNextID() { return uniqueID_++; }
+    void resetID() { uniqueID_ = 0; }
 
   public:
     Expander(llvm::Module& m);

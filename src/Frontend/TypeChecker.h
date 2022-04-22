@@ -40,14 +40,11 @@ class Env {
     std::unordered_map<std::string, FunctionType> signatures_;
     Signature currentFn_;
 
-    /* Not related to the semantics of the type-checker, just for passing around a printing object. */
-    std::unique_ptr<PrintAbsyn> printer_;
   public:
     Env()
         : scopes_()
           , signatures_()
-          , currentFn_()
-          , printer_(new PrintAbsyn()) {}
+          , currentFn_() {}
 
     void enterScope();
     void exitScope();
@@ -66,9 +63,6 @@ class Env {
     // Adds a variable to the current scope, throws if it already exists.
     void addVar(const std::string& name, TypeCode t);
 
-    /* Not related to the semantics of the type-checker, just for printing */
-    inline std::string Print(Visitable* v) { return printer_->print(v); }
-
 };
 
 std::string toString(TypeCode t);
@@ -80,7 +74,7 @@ OpCode opcode(Visitable* p);
 ETyped* infer(Visitable* p, Env& env);
 
 //  Returns the OpCode for an Operation
-class OpCoder : public ValueVisitor<OpCoder, OpCode> {
+class OpCoder : public ValueVisitor<OpCode> {
 public:
     void visitLE  (LE  *p) override { Return(OpCode::LE);  }
     void visitLTH (LTH *p) override { Return(OpCode::LTH); }
@@ -96,7 +90,7 @@ public:
 };
 
 //  Returns the TypeCode for a Type
-class TypeCoder : public ValueVisitor<TypeCoder, TypeCode> {
+class TypeCoder : public ValueVisitor<TypeCode> {
 public:
     void visitInt(Int *p)   override { Return(TypeCode::INT); }
     void visitDoub(Doub *p) override { Return(TypeCode::DOUBLE); }
@@ -109,7 +103,7 @@ public:
 
 // Returns an annotated version of the expression and
 // checks the compatability between operands and supported types for operators.
-class TypeInferrer : public ValueVisitor<TypeInferrer, ETyped*, Env> {
+class TypeInferrer : public ValueVisitor<ETyped*> {
     Env& env_;
 
     static bool typeIn(TypeCode t, std::initializer_list<TypeCode> list);
@@ -138,7 +132,7 @@ public:
 
 // Handles the type-checking for declarations, needed because the "children"
 // i.e. Init/NoInit, needs access to the type variable
-class DeclHandler : public VoidVisitor<DeclHandler, Env> {
+class DeclHandler : public VoidVisitor {
     Env& env_;
     TypeCode t; // Holds the type of the declaration
 public:
@@ -152,7 +146,7 @@ public:
 };
 
 // Checks a sequence of statements
-class StatementChecker : public VoidVisitor<StatementChecker, Env> {
+class StatementChecker : public VoidVisitor {
     Env& env_;
     Signature currentFn_;
 public:
@@ -176,7 +170,7 @@ public:
 };
 
 // Checks that the function returns a value (for non-void). True if OK.
-class ReturnChecker : public ValueVisitor<ReturnChecker, bool, Env> {
+class ReturnChecker : public ValueVisitor<bool> {
     Env& env_;
 public:
     explicit ReturnChecker(Env& env): env_(env) { v_ = false ; }
@@ -198,7 +192,7 @@ public:
 
 };
 
-class FunctionChecker : public VoidVisitor<FunctionChecker, Env> {
+class FunctionChecker : public VoidVisitor {
     Env& env_;
 public:
     explicit FunctionChecker(Env& env)
@@ -210,7 +204,7 @@ public:
     void visitArgument(Argument *p) override;
 };
 
-class ProgramChecker : public VoidVisitor<ProgramChecker, Env> {
+class ProgramChecker : public VoidVisitor {
     Env env_;
 public:
     explicit ProgramChecker(Env& env)

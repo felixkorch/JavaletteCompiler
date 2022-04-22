@@ -81,22 +81,21 @@ class BaseVisitor : public Visitor {
     void visitIdent(Ident x);
 };
 
-template <class VisitorImpl, class... Contexts>
 class VoidVisitor : public BaseVisitor {
   public:
-    void inline constexpr Visit(Visitable* p) {
+    void inline Visit(Visitable* p) {
         p->accept(this);
     }
 };
 
-template <class VisitorImpl, class ValueType, class... Contexts>
+template <class ValueType>
 class ValueVisitor : public BaseVisitor {
   protected:
     ValueType v_;
   public:
     void inline constexpr Return(ValueType v) { v_ = v; }
 
-    ValueType inline constexpr Visit(Visitable* p) {
+    ValueType inline Visit(Visitable* p) {
         p->accept(this);
         return v_;
     }

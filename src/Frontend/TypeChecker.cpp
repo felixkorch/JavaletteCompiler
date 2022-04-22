@@ -151,8 +151,7 @@ void StatementChecker::visitAss(Ass* p) {
     ETyped* exprTyped = infer(p->expr_, env_);
 
     if (assignType != typecode(exprTyped)) {
-        throw TypeError(env_.Print(p->expr_) + " has type " +
-                            toString(exprTyped) + ", expected " +
+        throw TypeError("Expr has type " + toString(exprTyped) + ", expected " +
                             toString(assignType) + " for variable " + p->ident_,
                         p->line_number, p->char_number);
     }
@@ -272,13 +271,13 @@ auto TypeInferrer::checkBinExp(Expr* e1, Expr* e2, const std::string& op,
 
     if (!typeIn(typecode(e1Typed), allowedTypes) ||
         !typeIn(typecode(e2Typed), allowedTypes)) {
-        throw TypeError("Invalid operands of types " + toString(e1Typed) +
-                            " and " + toString(e2Typed) + " to binary " + op,
+        throw TypeError("Invalid operands of types " + toString(e1Typed) + " and " +
+                            toString(e2Typed) + " to binary " + op,
                         e1->line_number, e1->char_number);
     }
     if (typecode(e1Typed) != typecode(e2Typed)) {
-        throw TypeError("Incompatible operands of types " + toString(e1Typed) +
-                            " and " + toString(e2Typed) + " to binary " + op,
+        throw TypeError("Incompatible operands of types " + toString(e1Typed) + " and " +
+                            toString(e2Typed) + " to binary " + op,
                         e1->line_number, e1->char_number);
     }
     return std::pair(e1Typed, e2Typed);
@@ -289,8 +288,7 @@ auto TypeInferrer::checkUnExp(Expr* e, const std::string& op,
     ETyped* eTyped = Visit(e);
 
     if (!typeIn(typecode(eTyped), allowedTypes)) {
-        throw TypeError("Invalid operand of type " + toString(eTyped) +
-                            " to unary " + op,
+        throw TypeError("Invalid operand of type " + toString(eTyped) + " to unary " + op,
                         e->line_number, e->char_number);
     }
     return eTyped;
@@ -468,9 +466,7 @@ std::string toString(TypeCode t) {
     }
 }
 
-std::string toString(ETyped* p) {
-    return toString(typecode(p));
-}
+std::string toString(ETyped* p) { return toString(typecode(p)); }
 
 std::string toString(OpCode c) {
     switch (c) {

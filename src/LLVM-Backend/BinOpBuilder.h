@@ -6,8 +6,10 @@
 namespace jlc::codegen {
 
 // Builds all binary expressions except AND / OR.
+// It starts by evaluating exp 1 and exp 2 by building both.
+// Then the appropriate bin-op function will be called.
 class BinOpBuilder
-    : public ValueVisitor<BinOpBuilder, llvm::Value*, Codegen, Expr*, Expr*> {
+    : public ValueVisitor<llvm::Value*> {
   public:
     BinOpBuilder(Codegen& parent, Expr* e1, Expr* e2);
 

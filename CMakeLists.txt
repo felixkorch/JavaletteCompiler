@@ -36,8 +36,8 @@ set(jlc-lib_SOURCE ${bnfc_SOURCE}
         src/LLVM-Backend/CodegenEnv.h
         src/LLVM-Backend/ExpBuilder.cpp
         src/LLVM-Backend/ExpBuilder.h
-        src/LLVM-Backend/IntermediateBuilder.cpp
-        src/LLVM-Backend/IntermediateBuilder.h
+        src/LLVM-Backend/ProgramBuilder.cpp
+        src/LLVM-Backend/ProgramBuilder.h
         src/Common/Util.h
         src/Frontend/Parser.h)
 

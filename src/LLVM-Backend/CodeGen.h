@@ -17,7 +17,8 @@ class Codegen {
     llvm::Module& getModuleRef() { return *module_; }
 
   private:
-    friend class IntermediateBuilder;
+    // These visitors need access to the codegen-environment and are therefore friends.
+    friend class ProgramBuilder;
     friend class FunctionAdder;
     friend class DeclBuilder;
     friend class TypeEncoder;
@@ -47,8 +48,11 @@ class Codegen {
     llvm::Type* charPtrType;
 };
 
+// Helper classes & functions
+// ------------------------------------------------------------
+
 // Returns the llvm-equivalent (llvm::Type*) from a bnfc::Type*
-class TypeEncoder : public ValueVisitor<TypeEncoder, llvm::Type*, Codegen> {
+class TypeEncoder : public ValueVisitor<llvm::Type*> {
   public:
     TypeEncoder(Codegen& parent) : parent_(parent) {}
 
@@ -63,7 +67,7 @@ class TypeEncoder : public ValueVisitor<TypeEncoder, llvm::Type*, Codegen> {
 };
 
 // Returns the default value for each type
-class DefaultValue : public ValueVisitor<DefaultValue, llvm::Constant*, Codegen> {
+class DefaultValue : public ValueVisitor<llvm::Constant*> {
   public:
     DefaultValue(Codegen& parent) : parent_(parent) {}
 

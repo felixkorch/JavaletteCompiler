@@ -1,10 +1,10 @@
-#include "IntermediateBuilder.h"
+#include "ProgramBuilder.h"
 #include "ExpBuilder.h"
 namespace jlc::codegen {
 
 /************  Some helper-visitors   ************/
 
-class DeclBuilder : public VoidVisitor<DeclBuilder, Codegen> {
+class DeclBuilder : public VoidVisitor {
   public:
     DeclBuilder(Codegen& parent) : parent_(parent), declType_() {}
     void visitDecl(Decl* p) override {
@@ -32,7 +32,7 @@ class DeclBuilder : public VoidVisitor<DeclBuilder, Codegen> {
     bnfc::Type* declType_;
 };
 
-class FunctionAdder : public VoidVisitor<FunctionAdder, Codegen> {
+class FunctionAdder : public VoidVisitor {
   public:
     FunctionAdder(Codegen& parent) : parent_(parent) {}
 
@@ -55,10 +55,10 @@ class FunctionAdder : public VoidVisitor<FunctionAdder, Codegen> {
 
 /************  Intermediate Builder   ************/
 
-IntermediateBuilder::IntermediateBuilder(Codegen& parent)
+ProgramBuilder::ProgramBuilder(Codegen& parent)
     : parent_(parent), isLastStmt_(false) {}
 
-void IntermediateBuilder::visitProgram(Program* p) {
+void ProgramBuilder::visitProgram(Program* p) {
     // Create the functions before building each
     FunctionAdder fnAdder(parent_);
     for (TopDef* fn : *p->listtopdef_)
@@ -68,7 +68,7 @@ void IntermediateBuilder::visitProgram(Program* p) {
         Visit(fn);
 }
 
-void IntermediateBuilder::visitFnDef(FnDef* p) {
+void ProgramBuilder::visitFnDef(FnDef* p) {
     llvm::Function* currentFn = parent_.env_->findFn(p->ident_);
     parent_.env_->setCurrentFn(currentFn);
     llvm::BasicBlock* bb =
@@ -98,9 +98,9 @@ void IntermediateBuilder::visitFnDef(FnDef* p) {
     parent_.env_->exitScope();
 }
 
-void IntermediateBuilder::visitBlock(Block* p) { Visit(p->liststmt_); }
+void ProgramBuilder::visitBlock(Block* p) { Visit(p->liststmt_); }
 
-void IntermediateBuilder::visitListStmt(ListStmt* p) {
+void ProgramBuilder::visitListStmt(ListStmt* p) {
     if (p->empty())
         return;
     auto last = p->end() - 1;
@@ -111,44 +111,42 @@ void IntermediateBuilder::visitListStmt(ListStmt* p) {
     isLastStmt_ = false;
 }
 
-void IntermediateBuilder::visitBStmt(BStmt* p) {
+void ProgramBuilder::visitBStmt(BStmt* p) {
     parent_.env_->enterScope();
     Visit(p->blk_);
     parent_.env_->exitScope();
 }
 
-void IntermediateBuilder::visitDecl(Decl* p) {
+void ProgramBuilder::visitDecl(Decl* p) {
     DeclBuilder declBuilder(parent_);
     declBuilder.Visit(p);
 }
 
-// TODO: Might have 1 expBuilder as member instead
-
-void IntermediateBuilder::visitSExp(SExp* p) {
+void ProgramBuilder::visitSExp(SExp* p) {
     ExpBuilder expBuilder(parent_);
     expBuilder.Visit(p->expr_);
 }
 
-void IntermediateBuilder::visitRet(Ret* p) {
+void ProgramBuilder::visitRet(Ret* p) {
     ExpBuilder expBuilder(parent_);
     llvm::Value* exp = expBuilder.Visit(p->expr_);
     parent_.builder_->CreateRet(exp);
     parent_.builder_->CreateUnreachable();
 }
 
-void IntermediateBuilder::visitVRet(VRet* p) {
+void ProgramBuilder::visitVRet(VRet* p) {
     parent_.builder_->CreateRetVoid();
     parent_.builder_->CreateUnreachable();
 }
 
-void IntermediateBuilder::visitAss(Ass* p) {
+void ProgramBuilder::visitAss(Ass* p) {
     ExpBuilder expBuilder(parent_);
     llvm::Value* exp = expBuilder.Visit(p->expr_);          // Build expr
     llvm::Value* varPtr = parent_.env_->findVar(p->ident_); // Get ptr to var
     parent_.builder_->CreateStore(exp, varPtr);             // *ptr <- expr
 }
 
-void IntermediateBuilder::visitCond(Cond* p) {
+void ProgramBuilder::visitCond(Cond* p) {
     ExpBuilder expBuilder(parent_);
     llvm::Value* cond = expBuilder.Visit(p->expr_);
     llvm::BasicBlock* trueBlock = parent_.newBasicBlock();
@@ -162,7 +160,7 @@ void IntermediateBuilder::visitCond(Cond* p) {
         parent_.builder_->CreateUnreachable();
 }
 
-void IntermediateBuilder::visitCondElse(CondElse* p) {
+void ProgramBuilder::visitCondElse(CondElse* p) {
     ExpBuilder expBuilder(parent_);
     llvm::Value* cond = expBuilder.Visit(p->expr_);
     llvm::BasicBlock* trueBlock = parent_.newBasicBlock();
@@ -180,7 +178,7 @@ void IntermediateBuilder::visitCondElse(CondElse* p) {
         parent_.builder_->CreateUnreachable();
 }
 
-void IntermediateBuilder::visitWhile(While* p) {
+void ProgramBuilder::visitWhile(While* p) {
     ExpBuilder expBuilder(parent_);
     llvm::BasicBlock* testBlock = parent_.newBasicBlock();
     llvm::BasicBlock* trueBlock = parent_.newBasicBlock();
@@ -195,7 +193,7 @@ void IntermediateBuilder::visitWhile(While* p) {
     parent_.builder_->SetInsertPoint(contBlock);
 }
 
-void IntermediateBuilder::visitIncr(Incr* p) {
+void ProgramBuilder::visitIncr(Incr* p) {
     llvm::Value* varPtr = parent_.env_->findVar(p->ident_);
     llvm::Value* var = parent_.builder_->CreateLoad(parent_.int32, varPtr);
     llvm::Value* newVal =
@@ -203,7 +201,7 @@ void IntermediateBuilder::visitIncr(Incr* p) {
     parent_.builder_->CreateStore(newVal, varPtr);
 }
 
-void IntermediateBuilder::visitDecr(Decr* p) {
+void ProgramBuilder::visitDecr(Decr* p) {
     llvm::Value* varPtr = parent_.env_->findVar(p->ident_);
     llvm::Value* var = parent_.builder_->CreateLoad(parent_.int32, varPtr);
     llvm::Value* newVal =
@@ -211,6 +209,6 @@ void IntermediateBuilder::visitDecr(Decr* p) {
     parent_.builder_->CreateStore(newVal, varPtr);
 }
 
-void IntermediateBuilder::visitEmpty(Empty* p) {}
+void ProgramBuilder::visitEmpty(Empty* p) {}
 
 } // namespace jlc::codegen

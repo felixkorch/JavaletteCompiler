@@ -1,5 +1,5 @@
 #include "CodeGen.h"
-#include "IntermediateBuilder.h"
+#include "ProgramBuilder.h"
 
 namespace jlc::codegen {
 
@@ -24,7 +24,7 @@ Codegen::Codegen(const std::string& moduleName) {
 }
 
 void Codegen::run(bnfc::Prog* p) {
-    IntermediateBuilder builder(*this);
+    ProgramBuilder builder(*this);
     builder.Visit(p);
     for (auto& fn : module_->functions())
         removeUnreachableCode(fn);

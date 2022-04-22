@@ -4,10 +4,13 @@
 
 namespace jlc::codegen {
 
-// This class builds the whole program.
-class IntermediateBuilder : public VoidVisitor<IntermediateBuilder, Codegen> {
+// This class builds the whole program:
+// 1. Adds function declarations
+// 2. Builds the functions definitions and allocates space for args.
+// 3. Builds all statements in the function
+class ProgramBuilder : public VoidVisitor {
   public:
-    IntermediateBuilder(Codegen& parent);
+    ProgramBuilder(Codegen& parent);
     void visitProgram(Program* p);
     void visitFnDef(FnDef* p);
     void visitBlock(Block* p);

@@ -6,6 +6,13 @@ Implemented features so far:
 * Type-checking
 * LLVM-Backend
 
+Extensions
+-------------------------------------------------------------
+Planned extensions are:
+- x86-Backend (Probably from LLVM) with some form of reg-allocation
+- Arrays
+- Pointers/Structs (If I have time to do it)
+
 Prerequisites:
 -------------------------------------------------------------
 - bison (>=3.8.2)

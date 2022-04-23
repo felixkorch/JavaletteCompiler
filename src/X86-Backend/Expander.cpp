@@ -3,187 +3,219 @@
 #include "llvm/IR/Instruction.def"
 #include <sstream>
 
-using namespace llvm;
-
 namespace jlc::x86 {
 
-X86ValueType Expander::convertType(Value* a) {
-    if (auto* gep = dyn_cast<GEPOperator>(a)) {
-        if (auto* glb = dyn_cast<GlobalVariable>(gep->getPointerOperand())) {
-            return X86ValueType::GLOBAL_VAR;
+ValueType Expander::convertType(llvm::Value* a) {
+    if (auto* gep = llvm::dyn_cast<llvm::GEPOperator>(a)) {
+        if (auto* glb = llvm::dyn_cast<llvm::GlobalVariable>(gep->getPointerOperand())) {
+            return ValueType::GLOBAL_VAR;
         }
-    } else if (auto* cInt = dyn_cast<ConstantInt>(a)) {
-        return X86ValueType::INT_CONSTANT;
-    } else if (auto* cDouble = dyn_cast<ConstantFP>(a)) {
-        return X86ValueType::DOUBLE_CONSTANT;
-    } else if (a->getType() == Type::getDoublePtrTy(c_)) {
-        return X86ValueType::DOUBLE_PTR;
-    } else if (a->getType() == Type::getInt32PtrTy(c_)) {
-        return X86ValueType::INT_PTR;
+    } else if (auto* cInt = llvm::dyn_cast<llvm::ConstantInt>(a)) {
+        return ValueType::INT_CONSTANT;
+    } else if (auto* cDouble = llvm::dyn_cast<llvm::ConstantFP>(a)) {
+        return ValueType::DOUBLE_CONSTANT;
     }
 }
 
-// If constant, return new constant. Otherwise, find produced value and return it.
-X86Value* Expander::getIfConstant(Value* v) {
-    if (convertType(v) == X86ValueType::INT_CONSTANT) { // Const int
-        ConstantInt* num = (ConstantInt*)v;
-        return new X86IntConstant((int)num->getSExtValue());
-    } else if (convertType(v) == X86ValueType::DOUBLE_CONSTANT) { // Const double
-        ConstantFP* num = (ConstantFP*)v;
-        return new X86DoubleConstant(num->getValue().convertToFloat());
+// If constant, return new constant. Otherwise, find prev. assigned value and return it.
+Value* Expander::getConstOrAssigned(llvm::Value* v) {
+    if (convertType(v) == ValueType::INT_CONSTANT) { // Const int
+        llvm::ConstantInt* num = (llvm::ConstantInt*)v;
+        return new IntConstant((int)num->getSExtValue());
+    } else if (convertType(v) == ValueType::DOUBLE_CONSTANT) { // Const double
+        llvm::ConstantFP* num = (llvm::ConstantFP*)v;
+        return new DoubleConstant(num->getValue().convertToFloat());
     }
     return valueMap_[v];
 }
 
 // TODO: Tidy up this fn
-void Expander::visitCall(const CallInst& i, X86Block* b) {
+void Expander::visitCall(const llvm::CallInst& i, Block* b) {
     Call* call = new Call(getNextID());
-    Function* target = i.getCalledFunction();
+    llvm::Function* target = i.getCalledFunction();
     for (auto& a : i.args()) {
-        if (auto* gep = dyn_cast<GEPOperator>(a)) {
-            if (auto* glb = dyn_cast<GlobalVariable>(gep->getPointerOperand())) {
+        if (auto* gep = llvm::dyn_cast<llvm::GEPOperator>(a)) {
+            if (auto* glb = llvm::dyn_cast<llvm::GlobalVariable>(gep->getPointerOperand())) {
                 call->args.push_back(globalMap_[glb]);
             }
-        } else if (auto* cInt = dyn_cast<ConstantInt>(a)) {
+        } else if (auto* cInt = llvm::dyn_cast<llvm::ConstantInt>(a)) {
             call->args.push_back(valueMap_[cInt]);
-        } else if (auto* cDouble = dyn_cast<ConstantFP>(a)) {
+        } else if (auto* cDouble = llvm::dyn_cast<llvm::ConstantFP>(a)) {
             call->args.push_back(valueMap_[cDouble]);
         }
     }
-    valueMap_.insert({(Value*)&i, call});
     call->target = functionMap_[target];
+    valueMap_.insert({(llvm::Value*)&i, call});
     b->instructions.push_back(call);
 }
 
-void Expander::visitAlloca(const AllocaInst& i, X86Block* b) {
+void Expander::visitAlloca(const llvm::AllocaInst& i, Block* b) {
     Add* add = new Add(getNextID());
-    add->reg = X86Reg::esp;
+    add->reg = RegID::esp;
     int size = INT_SIZE;
-    if (i.getType() == Type::getDoublePtrTy(c_)) {
+    if (i.getType() == llvm::Type::getDoublePtrTy(c_)) {
         size = DOUBLE_SIZE;
-    } else if (i.getType() == Type::getInt32PtrTy(c_)) {
+    } else if (i.getType() == llvm::Type::getInt32PtrTy(c_)) {
         size = INT_SIZE;
     }
-    add->left = new X86IntConstant(size); // TODO: Factory that frees mem
-    add->right = new X86SpecialReg(X86Reg::esp);
-    valueMap_.insert({(Value*)&i, add});
+    add->left = factory_.newIntConst(-size);
+    add->right = factory_.newReg(RegID::esp);
+    valueMap_.insert({(llvm::Value*)&i, add});
     b->instructions.push_back(add);
 }
 
-void Expander::visitStore(const StoreInst& i, X86Block* b) {
+void Expander::visitStore(const llvm::StoreInst& i, Block* b) {
     Mov* mov = new Mov(getNextID());
-    Value* from = i.getOperand(0);
-    Value* to = i.getOperand(1);
-    mov->from = getIfConstant(from);
+    llvm::Value* from = i.getOperand(0);
+    llvm::Value* to = i.getOperand(1);
+    mov->from = getConstOrAssigned(from);
     mov->to = valueMap_[to];
-    valueMap_.insert({(Value*)&i, mov});
+    valueMap_.insert({(llvm::Value*)&i, mov});
     b->instructions.push_back(mov);
 }
 
-void Expander::visitLoad(const LoadInst& i, X86Block* b) {
+void Expander::visitLoad(const llvm::LoadInst& i, Block* b) {
     Mov* mov = new Mov(getNextID());
-    Value* from = i.getOperand(0);
+    llvm::Value* from = i.getOperand(0);
     mov->from = valueMap_[from];
-    valueMap_.insert({(Value*)&i, mov});
+    valueMap_.insert({(llvm::Value*)&i, mov});
     b->instructions.push_back(mov);
 }
 
-void Expander::visitICmp(const ICmpInst& i, X86Block* b) { }
+void Expander::visitICmp(const llvm::ICmpInst& i, Block* b) {}
 
-void Expander::visitBr(const BranchInst& i, X86Block* b) { }
+void Expander::visitBr(const llvm::BranchInst& i, Block* b) {}
 
-void Expander::visitXor(const BinaryOperator& i, X86Block* b) {
+void Expander::visitXor(const llvm::BinaryOperator& i, Block* b) {}
 
-}
-
-void Expander::visitRet(const ReturnInst& i, X86Block* b) {
-    X86Instruction* ret;
+void Expander::visitRet(const llvm::ReturnInst& i, Block* b) {
+    Mov* mov = nullptr;
     if (i.getNumOperands() > 0) { // Non-void: Move ret-val to %eax, then return
-        ret = new ValueRet(getNextID());
-        Value* retVal = i.getReturnValue();
-        X86Value* x86RetVal = getIfConstant(retVal);
-        Mov* mov = new Mov(getNextID());
+        mov = new Mov(getNextID());
+        llvm::Value* retVal = i.getReturnValue();
+        Value* x86RetVal = getConstOrAssigned(retVal);
         mov->from = x86RetVal;
-        mov->reg = X86Reg::eax; // Store result in %eax
-        static_cast<ValueRet*>(ret)->returnVal = mov;
+        mov->reg = RegID::eax; // Store result in %eax
         b->instructions.push_back(mov);
-    } else {
-        ret = new VoidRet(getNextID()); // Void
     }
-    valueMap_.insert({(Value*)&i, ret});
+
+    Mov* restoreESP = new Mov(getNextID());
+    restoreESP->from = factory_.newReg(RegID::ebp);
+    restoreESP->reg = RegID::esp;
+
+    Pop* restoreEBP = new Pop(getNextID());
+    restoreEBP->target = factory_.newReg(RegID::ebp);
+
+    Ret* ret = new Ret(getNextID());
+    if (mov)
+        ret->retVal = mov;
+    valueMap_.insert({(llvm::Value*)&i, ret});
+
+    b->instructions.push_back(restoreESP);
+    b->instructions.push_back(restoreEBP);
     b->instructions.push_back(ret);
 }
 
-void Expander::visitAdd(const BinaryOperator& i, X86Block* b) {
+void Expander::visitAdd(const llvm::BinaryOperator& i, Block* b) {
     Add* add = new Add(getNextID());
-    X86Value* left = getIfConstant(i.getOperand(0));
-    X86Value* right = getIfConstant(i.getOperand(1));
-    valueMap_.insert({(Value*)&i, add});
+    Value* left = getConstOrAssigned(i.getOperand(0));
+    Value* right = getConstOrAssigned(i.getOperand(1));
+    valueMap_.insert({(llvm::Value*)&i, add});
     b->instructions.push_back(add);
 }
 
-void Expander::visitPHI(const PHINode& i, X86Block* b) {
+void Expander::visitPHI(const llvm::PHINode& i, Block* b) {
     PseudoPHI* phi = new PseudoPHI(getNextID());
     static bool firstPHI = true; // TODO: Doesn't work in parallel
     b->firstPHI = phi;
     b->instructions.push_back(phi);
 }
 
-void Expander::buildInstruction(llvm::Instruction& i, X86Block* b) {
+void Expander::buildInstruction(llvm::Instruction& i, Block* b) {
     switch (i.getOpcode()) {
     default: llvm_unreachable("Unknown instruction type encountered!");
-    case Instruction::Call: visitCall((const CallInst&)i, b); break;
-    case Instruction::Alloca: visitAlloca((const AllocaInst&)i, b); break;
-    case Instruction::Load: visitLoad((const LoadInst&)i, b); break;
-    case Instruction::Store: visitStore((const StoreInst&)i, b); break;
-    case Instruction::ICmp: visitICmp((const ICmpInst&)i, b); break;
-    case Instruction::Br: visitBr((const BranchInst&)i, b); break;
-    case Instruction::Xor: visitXor((const BinaryOperator&)i, b); break;
-    case Instruction::Ret: visitRet((const ReturnInst&)i, b); break;
-    case Instruction::PHI: visitPHI((const PHINode&)i, b); break;
-    case Instruction::Add: visitAdd((const BinaryOperator&)i, b); break;
+    case llvm::Instruction::Call: visitCall((const llvm::CallInst&)i, b); break;
+    case llvm::Instruction::Alloca: visitAlloca((const llvm::AllocaInst&)i, b); break;
+    case llvm::Instruction::Load: visitLoad((const llvm::LoadInst&)i, b); break;
+    case llvm::Instruction::Store: visitStore((const llvm::StoreInst&)i, b); break;
+    case llvm::Instruction::ICmp: visitICmp((const llvm::ICmpInst&)i, b); break;
+    case llvm::Instruction::Br: visitBr((const llvm::BranchInst&)i, b); break;
+    case llvm::Instruction::Xor: visitXor((const llvm::BinaryOperator&)i, b); break;
+    case llvm::Instruction::Ret: visitRet((const llvm::ReturnInst&)i, b); break;
+    case llvm::Instruction::PHI: visitPHI((const llvm::PHINode&)i, b); break;
+    case llvm::Instruction::Add: visitAdd((const llvm::BinaryOperator&)i, b); break;
     }
 }
 
-Expander::Expander(Module& m) : m_(m), c_(m.getContext()), uniqueID_(0) {
-    x86Program_ = std::make_shared<X86Program>();
+void Expander::buildPreamble(Function* f) {
+    auto entry = f->blocks.front();
+    Push* pushEBP = new Push(getNextID());
+    pushEBP->target = factory_.newReg(RegID::ebp);
+    Mov* setEBP = new Mov(getNextID());
+    setEBP->from = factory_.newReg(RegID::esp);
+    setEBP->reg = RegID::ebp;
+    entry->instructions.push_back(pushEBP);
+    entry->instructions.push_back(setEBP);
+}
 
+Expander::Expander(llvm::Module& m)
+    : m_(m), c_(m.getContext()), uniqueID_(0), globalID_(0) {}
+
+void Expander::run() {
+    addGlobals();
+    addFunctionDecls();
+    buildFunctions();
+}
+
+void Expander::addGlobals() {
     // Add globals to X86-program
     // TODO: This assumes it is only strings
-    for (auto& g : m.getGlobalList()) {
-        ConstantDataArray* strLit = dyn_cast<ConstantDataArray>(g.getInitializer());
-        X86GlobalVar* glb = new X86GlobalVar();
-        glb->name = g.getGlobalIdentifier();
-        glb->pointingTo = new X86StringLit(strLit->getAsString());
-        x86Program_->globals.push_back(glb);
+    for (auto& g : m_.getGlobalList()) {
+        auto* strLit =
+            llvm::dyn_cast<llvm::ConstantDataArray>(g.getInitializer());
+        auto* glb = new GlobalVar();
+        glb->name = getGlobalID();
+        glb->pointingTo = new StringLit(strLit->getAsString());
+        x86Program_.globals.push_back(glb);
         globalMap_.insert({&g, glb});
     }
-
-    for (auto& fn : m) { // Generate function decl / defs
+}
+void Expander::addFunctionDecls(){
+    for (auto& fn : m_) { // Generate function declarations
         // Add function to program
-        X86Function* x86Function = new X86Function;
+        auto* x86Function = new Function;
         x86Function->name = fn.getName();
         if (fn.isDeclaration())
             x86Function->isDecl = true;
-        x86Program_->functions.push_back(x86Function);
+        x86Program_.functions.push_back(x86Function);
         functionMap_.insert({&fn, x86Function});
     }
+}
+void Expander::buildFunctions(){
+    for (auto& fn : m_) { // For each function, build
+        Function* x86Function = functionMap_[&fn];
+        if (x86Function->isDecl) // Don't build external functions
+            continue;
 
-    for (auto& fn : m) {      // For each function, build
-        for (auto& bb : fn) { // For each BasicBlock, build
-            X86Function* x86Function = functionMap_[&fn];
-            X86Block* x86Block = new X86Block;
+        // Insert BasicBlocks
+        for (auto& bb : fn) {
+            auto* x86Block = new Block;
             blockMap_.insert({&bb, x86Block});
             x86Function->blocks.push_back(x86Block);
+        }
 
-            for (auto& inst : bb) { // For each instruction, build
+        // Build preamble
+        buildPreamble(x86Function);
+
+        for (auto& bb : fn) { // For each BasicBlock, build
+            auto x86Block = blockMap_[&bb];
+            for (auto& inst : bb) // For each instruction, build
                 buildInstruction(inst, x86Block);
-            }
         }
 
         // Set preds / succs / first / last
         for (auto& bb : fn) {
-            X86Block* b = blockMap_[&bb];
+            Block* b = blockMap_[&bb];
             for (auto* succ : successors(&bb))
                 b->successors.push_back(blockMap_[succ]);
             for (auto* pred : predecessors(&bb))

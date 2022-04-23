@@ -2,33 +2,54 @@
 #include "llvm/IR/IRBuilder.h"
 #include <unordered_map>
 
-// TODO: Might implement a visitor
+template <class T, int N = 10>
+class SmallVector {
+    T data_[N] = {};
+    std::vector<T> dynamic_data_;
+    int offset_ = 0;
+    bool dynamic_ = false;
+  public:
+    SmallVector() {
+        dynamic_data_.reserve(N);
+    }
+    void push_back(T&& element) {
+        if(offset_ == N - 1) {
+            dynamic_ = true;
+            std::copy(&data_[0], &data_[N - 1], dynamic_data_.begin());
+        }
+
+        if(!dynamic_) {
+            data_[offset_++] = element;
+            return;
+        }
+
+        dynamic_data_.push_back(element);
+    }
+
+    T& operator [](int n) {
+        if(!dynamic_)
+            return data_[n];
+        return dynamic_data_[n];
+    }
+};
 
 namespace jlc::x86 {
 
-class X86SpecialReg;
-class X86IntPtr;
-class X86StringLit;
-class X86DoublePtr;
-class X86GlobalVar;
-class X86IntConstant;
-class X86Int;
-class X86Double;
-class X86DoubleConstant;
-class X86Instruction;
+class Reg;
+class StringLit;
+class GlobalVar;
+class IntConstant;
+class DoubleConstant;
+class Instruction;
 
 class Visitor {
   public:
-    virtual void visitX86SpecialReg(X86SpecialReg* p) = 0;
-    virtual void visitX86IntPtr(X86IntPtr* p) = 0;
-    virtual void visitX86StringLit(X86StringLit* p) = 0;
-    virtual void visitX86DoublePtr(X86DoublePtr* p) = 0;
-    virtual void visitX86GlobalVar(X86GlobalVar* p) = 0;
-    virtual void visitX86IntConstant(X86IntConstant* p) = 0;
-    virtual void visitX86Int(X86Int* p) = 0;
-    virtual void visitX86Double(X86Double* p) = 0;
-    virtual void visitX86DoubleConstant(X86DoubleConstant* p) = 0;
-    virtual void visitX86Instruction(X86Instruction* p) = 0;
+    virtual void visitX86SpecialReg(Reg* p) = 0;
+    virtual void visitX86StringLit(StringLit* p) = 0;
+    virtual void visitX86GlobalVar(GlobalVar* p) = 0;
+    virtual void visitX86IntConstant(IntConstant* p) = 0;
+    virtual void visitX86DoubleConstant(DoubleConstant* p) = 0;
+    virtual void visitX86Instruction(Instruction* p) = 0;
 };
 
 class Visitable {
@@ -37,14 +58,10 @@ class Visitable {
     virtual void accept(Visitor* v) = 0;
 };
 
-enum class X86ValueType {
+enum class ValueType {
     GLOBAL_VAR,
     INT_CONSTANT,
     DOUBLE_CONSTANT,
-    INT,
-    DOUBLE,
-    INT_PTR,
-    DOUBLE_PTR,
     STRING_LIT,
     INSTRUCTION,
     SPECIAL_REG
@@ -53,113 +70,98 @@ enum class X86ValueType {
 inline constexpr int INT_SIZE = 4;
 inline constexpr int DOUBLE_SIZE = 4;
 
-enum X86Reg { eax = 0, ebx, ecx, edx, esp, ebp, esi, edi };
+enum RegID { eax = 0, ebx, ecx, edx, esp, ebp, esi, edi };
 static const char* X86RegNames[] = {"eax", "ebx", "ecx", "edx",
                                     "esp", "ebp", "esi", "edi"};
 
-struct X86Value : public Visitable {
-    virtual ~X86Value() = default;
-    virtual X86ValueType getType() = 0;
+struct Value : public Visitable {
+    virtual ~Value() = default;
+    virtual ValueType getType() = 0;
 };
 
-struct X86SpecialReg : public X86Value {
-    X86Reg reg;
-    X86SpecialReg(X86Reg sReg) : reg(sReg) {}
-    X86ValueType getType() override { return X86ValueType::SPECIAL_REG; }
+struct Reg : public Value {
+    RegID reg;
+    Reg(RegID sReg) : reg(sReg) {}
+    ValueType getType() override { return ValueType::SPECIAL_REG; }
     void accept(Visitor* v) override { v->visitX86SpecialReg(this); }
 };
 
-struct X86IntPtr : public X86Value {
-    X86ValueType getType() override { return X86ValueType::INT_PTR; }
-    void accept(Visitor* v) override { v->visitX86IntPtr(this); }
-};
-
-struct X86StringLit : public X86Value {
+struct StringLit : public Value {
     std::string value;
-    X86StringLit(llvm::StringRef val) : value(val) {}
-    X86ValueType getType() override { return X86ValueType::STRING_LIT; }
+    StringLit(llvm::StringRef val) : value(val) {}
+    ValueType getType() override { return ValueType::STRING_LIT; }
     void accept(Visitor* v) override { v->visitX86StringLit(this); }
 };
 
-struct X86DoublePtr : public X86Value {
-    X86ValueType getType() override { return X86ValueType::DOUBLE_PTR; }
-    void accept(Visitor* v) override { v->visitX86DoublePtr(this); }
-};
-
-struct X86GlobalVar : public X86Value {
+struct GlobalVar : public Value {
     std::string name;
-    X86Value* pointingTo;
-    X86ValueType getType() override { return X86ValueType::GLOBAL_VAR; }
-    ~X86GlobalVar() { delete pointingTo; }
+    Value* pointingTo;
+    ValueType getType() override { return ValueType::GLOBAL_VAR; }
+    ~GlobalVar() { delete pointingTo; }
     void accept(Visitor* v) override { v->visitX86GlobalVar(this); }
 };
 
-struct X86IntConstant : public X86Value {
+struct IntConstant : public Value {
     int value;
-    X86IntConstant(int num) : value(num) {}
-    X86ValueType getType() override { return X86ValueType::INT_CONSTANT; }
+    IntConstant(int num) : value(num) {}
+    ValueType getType() override { return ValueType::INT_CONSTANT; }
     void accept(Visitor* v) override { v->visitX86IntConstant(this); }
 };
 
-struct X86Int : public X86Value {
-    X86ValueType getType() override { return X86ValueType::INT; }
-    void accept(Visitor* v) override { v->visitX86Int(this); }
-};
-
-struct X86Double : public X86Value {
-    X86ValueType getType() override { return X86ValueType::DOUBLE; }
-    void accept(Visitor* v) override { v->visitX86Double(this); }
-};
-
-struct X86DoubleConstant : public X86Value {
+struct DoubleConstant : public Value {
     double value;
-    X86DoubleConstant(double num) : value(num) {}
-    X86ValueType getType() override { return X86ValueType::DOUBLE_CONSTANT; }
+    DoubleConstant(double num) : value(num) {}
+    ValueType getType() override { return ValueType::DOUBLE_CONSTANT; }
     void accept(Visitor* v) override { v->visitX86DoubleConstant(this); }
 };
 
-struct X86Instruction : public X86Value {
+struct Instruction : public Value {
     int n;        // Unique instruction number
     int reg = -1; // Holds the register assigned to the instruction
 
-    X86Instruction(int id) : n(id) {}
-    virtual ~X86Instruction() {}
-    X86ValueType getType() override { return X86ValueType::INSTRUCTION; }
+    Instruction(int id) : n(id) {}
+    virtual ~Instruction() {}
+    ValueType getType() override { return ValueType::INSTRUCTION; }
     virtual const char* getName() = 0;
-    virtual std::vector<X86Value*> operands() = 0;
+    virtual std::vector<Value*> operands() = 0;
     void accept(Visitor* v) override { v->visitX86Instruction(this); }
 };
 
-struct X86Block {
-    std::vector<X86Block*> predecessors;
-    std::vector<X86Block*> successors;
-    std::vector<X86Instruction*> instructions;
-    X86Instruction *first, *last;
-    X86Instruction* firstPHI;
+struct Block {
+    std::vector<Block*> predecessors;
+    std::vector<Block*> successors;
+    std::vector<Instruction*> instructions;
+    Instruction *first, *last;
+    Instruction* firstPHI;
+    std::vector<Instruction*> liveSet; // Live vRegs at beginning of block
 
-    ~X86Block() {
+    ~Block() {
         for (auto i : instructions)
             delete i;
     }
 };
 
-struct X86Function {
-    std::vector<X86Block*> blocks;
+struct Function {
+    std::vector<Block*> blocks;
     std::string name;
-    bool isDecl = false;
+    bool isDecl = false; // Defined outside program-module
 
-    ~X86Function() {
+    ~Function() {
         // Clean up
         for (auto b : blocks)
             delete b;
     }
 };
 
-struct X86Program {
-    std::vector<X86GlobalVar*> globals;
-    std::vector<X86Function*> functions;
+struct Program {
+    std::vector<GlobalVar*> globals;
+    std::vector<Function*> functions;
 
-    ~X86Program() {
+    Program() = default;
+    Program(Program& other) = delete;
+    Program(Program&& other) = default;
+
+    ~Program() {
         // Clean up
         for (auto g : globals)
             delete g;
@@ -168,103 +170,162 @@ struct X86Program {
     }
 };
 
-struct Add : public X86Instruction {
-    X86Value *left, *right;
-    Add(int id) : X86Instruction(id) {}
-    std::vector<X86Value*> operands() override { return {left, right}; };
+struct Add : public Instruction {
+    Value *left, *right;
+    Add(int id) : Instruction(id) {}
+    std::vector<Value*> operands() override { return {left, right}; };
     const char* getName() override { return "Add"; }
 };
 
 // Move between regs / memory
-struct Mov : public X86Instruction {
-    X86Value *from = nullptr, *to = nullptr;
-    Mov(int id) : X86Instruction(id) {}
-    std::vector<X86Value*> operands() override {
-        return (to == nullptr) ? std::vector<X86Value*>{from}
-                               : std::vector<X86Value*>{from, to};
+struct Mov : public Instruction {
+    Value *from = nullptr, *to = nullptr;
+    Mov(int id) : Instruction(id) {}
+    std::vector<Value*> operands() override {
+        return to ? std::vector<Value*>{from, to} : std::vector<Value*>{from};
     };
     const char* getName() override { return "Mov"; }
 };
 
 // Push to stack
-struct Push : public X86Instruction {
-    X86Value* target;
-    Push(int id) : X86Instruction(id) {}
-    std::vector<X86Value*> operands() override { return {target}; };
+struct Push : public Instruction {
+    Value* target = nullptr;
+    Push(int id) : Instruction(id) {}
+    std::vector<Value*> operands() override { return {target}; };
     const char* getName() override { return "Push"; }
 };
 
 // Pop from stack
-struct Pop : public X86Instruction {
-    Pop(int id) : X86Instruction(id) {}
-    std::vector<X86Value*> operands() override { return {}; };
+struct Pop : public Instruction {
+    Value* target = nullptr;
+    Pop(int id) : Instruction(id) {}
+    std::vector<Value*> operands() override { return {target}; };
     const char* getName() override { return "Pop"; }
 };
 
 // Push addr of next instr, then execute function
-struct Call : public X86Instruction {
-    std::vector<X86Value*> args;
-    X86Function* target = nullptr;
-    Call(int id) : X86Instruction(id) {}
-    std::vector<X86Value*> operands() override { return args; };
+struct Call : public Instruction {
+    std::vector<Value*> args;
+    Function* target = nullptr;
+    Call(int id) : Instruction(id) {}
+    std::vector<Value*> operands() override { return args; };
     const char* getName() override { return "Call"; }
 };
 
-// Return void
-struct VoidRet : public X86Instruction {
-    VoidRet(int id) : X86Instruction(id) {}
-    std::vector<X86Value*> operands() override { return {}; };
-    const char* getName() override { return "Void-Return"; }
-};
-
-// Return value
-struct ValueRet : public X86Instruction {
-    X86Value* returnVal;
-    ValueRet(int id) : X86Instruction(id) {}
-    std::vector<X86Value*> operands() override { return {returnVal}; };
-    const char* getName() override { return "Return"; }
+// Return
+struct Ret : public Instruction {
+    Value* retVal = nullptr;
+    Ret(int id) : Instruction(id) {}
+    std::vector<Value*> operands() override {
+        return retVal ? std::vector<Value*>{retVal} : std::vector<Value*>{};
+    };
+    const char* getName() override { return "Ret"; }
 };
 
 // Used in reg-allocation
-struct PseudoPHI : public X86Instruction {
-    PseudoPHI(int id) : X86Instruction(id) {}
-    std::vector<X86Value*> operands() override { return {}; };
+struct PseudoPHI : public Instruction {
+    PseudoPHI(int id) : Instruction(id) {}
+    std::vector<Value*> operands() override { return {}; };
     const char* getName() override { return "Pseudo-PHI"; }
 };
 
+// Just to clean memory of non-instruction values
+// i.e values that are not produced by instructions.
+class ValueFactory {
+    std::vector<Value*> allocatedValues;
+
+  public:
+    ValueFactory() = default;
+    ValueFactory(ValueFactory& other) = delete;
+    ValueFactory(ValueFactory&& other) = default;
+
+    ~ValueFactory() {
+        for (auto v : allocatedValues)
+            delete v;
+    }
+
+    GlobalVar* newGlobalVar() {
+        auto* v = new GlobalVar;
+        allocatedValues.push_back(v);
+        return v;
+    }
+    IntConstant* newIntConst(int i) {
+        auto* v = new IntConstant(i);
+        allocatedValues.push_back(v);
+        return v;
+    }
+    DoubleConstant* newDoubleConst(double d) {
+        auto* v = new DoubleConstant(d);
+        allocatedValues.push_back(v);
+        return v;
+    }
+
+    Reg* newReg(RegID regID) {
+        auto* v = new Reg(regID);
+        allocatedValues.push_back(v);
+        return v;
+    }
+
+    StringLit* newStringLit(const std::string& ident) {
+        auto* v = new StringLit(ident);
+        allocatedValues.push_back(v);
+        return v;
+    }
+};
+
+class Module {
+    Program x86Program_;
+    ValueFactory factory_;
+
+  public:
+    Module(Program&& p, ValueFactory&& f)
+        : x86Program_(std::move(p)), factory_(std::move(f)) {}
+    Program& getProgram() { return x86Program_; }
+};
+
 class Expander {
-    std::shared_ptr<X86Program> x86Program_;
+    Program x86Program_;
+    ValueFactory factory_;
     llvm::Module& m_;
     llvm::LLVMContext& c_;
     int uniqueID_;
+    int globalID_;
 
     // These maps llvm domain -> X86 domain
     // Necessary for the expand-phase.
-    std::unordered_map<llvm::Value*, X86Value*> valueMap_;
-    std::unordered_map<llvm::Value*, X86GlobalVar*> globalMap_;
-    std::unordered_map<llvm::Value*, X86Function*> functionMap_;
-    std::unordered_map<llvm::Value*, X86Block*> blockMap_;
+    std::unordered_map<llvm::Value*, Value*> valueMap_;
+    std::unordered_map<llvm::Value*, GlobalVar*> globalMap_;
+    std::unordered_map<llvm::Value*, Function*> functionMap_;
+    std::unordered_map<llvm::Value*, Block*> blockMap_;
 
-    void visitCall(const llvm::CallInst& i, X86Block* b);
-    void visitAlloca(const llvm::AllocaInst& i, X86Block* b);
-    void visitStore(const llvm::StoreInst& i, X86Block* b);
-    void visitLoad(const llvm::LoadInst& i, X86Block* b);
-    void visitICmp(const llvm::ICmpInst& i, X86Block* b);
-    void visitBr(const llvm::BranchInst& i, X86Block* b);
-    void visitXor(const llvm::BinaryOperator& i, X86Block* b);
-    void visitRet(const llvm::ReturnInst& i, X86Block* b);
-    void visitPHI(const llvm::PHINode& i, X86Block* b);
-    void visitAdd(const llvm::BinaryOperator& i, X86Block* b);
+    // Builds specific instructions
+    void visitCall(const llvm::CallInst& i, Block* b);
+    void visitAlloca(const llvm::AllocaInst& i, Block* b);
+    void visitStore(const llvm::StoreInst& i, Block* b);
+    void visitLoad(const llvm::LoadInst& i, Block* b);
+    void visitICmp(const llvm::ICmpInst& i, Block* b);
+    void visitBr(const llvm::BranchInst& i, Block* b);
+    void visitXor(const llvm::BinaryOperator& i, Block* b);
+    void visitRet(const llvm::ReturnInst& i, Block* b);
+    void visitPHI(const llvm::PHINode& i, Block* b);
+    void visitAdd(const llvm::BinaryOperator& i, Block* b);
 
-    void buildInstruction(llvm::Instruction& i, X86Block* b);
-    X86ValueType convertType(llvm::Value* v);
-    X86Value* getIfConstant(llvm::Value* v);
+    void addGlobals();
+    void addFunctionDecls();
+    void buildFunctions();
+    void buildInstruction(llvm::Instruction& i, Block* b);
+    void buildPreamble(Function* f);
+
+    ValueType convertType(llvm::Value* v);
+    Value* getConstOrAssigned(llvm::Value* v);
     int getNextID() { return uniqueID_++; }
     void resetID() { uniqueID_ = 0; }
+    std::string getGlobalID() { return "@" + std::to_string(globalID_++); }
 
   public:
-    Expander(llvm::Module& m);
-    std::shared_ptr<X86Program> getX86Program() { return x86Program_; }
+    explicit Expander(llvm::Module& m);
+    void run();
+    Module getX86Module() { return Module{std::move(x86Program_), std::move(factory_)}; }
 };
 
 } // namespace jlc::x86

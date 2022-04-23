@@ -4,9 +4,9 @@
 namespace jlc::x86 {
 
 class Emitter {
-    std::shared_ptr<X86Program> program;
+    std::shared_ptr<Program> program;
   public:
-    Emitter(std::shared_ptr<X86Program> input) : program(input) {}
+    Emitter(std::shared_ptr<Program> input) : program(input) {}
 };
 
 }

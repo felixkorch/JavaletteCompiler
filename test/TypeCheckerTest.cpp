@@ -510,7 +510,7 @@ TEST(TypeChecker, ReturnsAnnotatedTree) {
     TypeChecker typeChecker;
 
     ASSERT_NO_THROW({
-        typeChecker.run(parser.getAST());
+        typeChecker.run(parser.getAbsyn());
     });
 
     TypeCheckerVisitor vis;

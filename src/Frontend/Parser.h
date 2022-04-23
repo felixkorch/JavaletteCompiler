@@ -13,16 +13,17 @@ namespace jlc {
 
 class Parser {
     bnfc::Prog* p_ = nullptr;
+
   public:
+    Parser() = default;
+    ~Parser() { delete p_; }
     void run(FILE* in) {
         p_ = bnfc::pProg(in);
-        if(p_ == nullptr)
+        if (p_ == nullptr)
             throw std::exception();
     }
 
-    bnfc::Prog* getAST() {
-        return p_;
-    }
+    bnfc::Prog* getAbsyn() { return p_; }
 };
 
-}
+} // namespace jlc

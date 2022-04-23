@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     TypeChecker typeChecker;
 
     try {
-        typeChecker.run(parser.getAST());
+        typeChecker.run(parser.getAbsyn());
     } catch(TypeError& t) {
         std::cerr << t.what() << std::endl;
         return 1;

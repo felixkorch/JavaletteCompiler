@@ -20,10 +20,10 @@ ValueType Expander::convertType(llvm::Value* a) {
 // If constant, return new constant. Otherwise, find prev. assigned value and return it.
 Value* Expander::getConstOrAssigned(llvm::Value* v) {
     if (convertType(v) == ValueType::INT_CONSTANT) { // Const int
-        llvm::ConstantInt* num = (llvm::ConstantInt*)v;
+        auto* num = (llvm::ConstantInt*)v;
         return new IntConstant((int)num->getSExtValue());
     } else if (convertType(v) == ValueType::DOUBLE_CONSTANT) { // Const double
-        llvm::ConstantFP* num = (llvm::ConstantFP*)v;
+        auto* num = (llvm::ConstantFP*)v;
         return new DoubleConstant(num->getValue().convertToFloat());
     }
     return valueMap_[v];
@@ -35,7 +35,8 @@ void Expander::visitCall(const llvm::CallInst& i, Block* b) {
     llvm::Function* target = i.getCalledFunction();
     for (auto& a : i.args()) {
         if (auto* gep = llvm::dyn_cast<llvm::GEPOperator>(a)) {
-            if (auto* glb = llvm::dyn_cast<llvm::GlobalVariable>(gep->getPointerOperand())) {
+            if (auto* glb =
+                    llvm::dyn_cast<llvm::GlobalVariable>(gep->getPointerOperand())) {
                 call->args.push_back(globalMap_[glb]);
             }
         } else if (auto* cInt = llvm::dyn_cast<llvm::ConstantInt>(a)) {
@@ -125,7 +126,7 @@ void Expander::visitAdd(const llvm::BinaryOperator& i, Block* b) {
 }
 
 void Expander::visitPHI(const llvm::PHINode& i, Block* b) {
-    PseudoPHI* phi = new PseudoPHI(getNextID());
+    auto* phi = new PseudoPHI(getNextID());
     static bool firstPHI = true; // TODO: Doesn't work in parallel
     b->firstPHI = phi;
     b->instructions.push_back(phi);
@@ -171,8 +172,7 @@ void Expander::addGlobals() {
     // Add globals to X86-program
     // TODO: This assumes it is only strings
     for (auto& g : m_.getGlobalList()) {
-        auto* strLit =
-            llvm::dyn_cast<llvm::ConstantDataArray>(g.getInitializer());
+        auto* strLit = llvm::dyn_cast<llvm::ConstantDataArray>(g.getInitializer());
         auto* glb = new GlobalVar();
         glb->name = getGlobalID();
         glb->pointingTo = new StringLit(strLit->getAsString());
@@ -180,7 +180,7 @@ void Expander::addGlobals() {
         globalMap_.insert({&g, glb});
     }
 }
-void Expander::addFunctionDecls(){
+void Expander::addFunctionDecls() {
     for (auto& fn : m_) { // Generate function declarations
         // Add function to program
         auto* x86Function = new Function;
@@ -191,7 +191,7 @@ void Expander::addFunctionDecls(){
         functionMap_.insert({&fn, x86Function});
     }
 }
-void Expander::buildFunctions(){
+void Expander::buildFunctions() {
     for (auto& fn : m_) { // For each function, build
         Function* x86Function = functionMap_[&fn];
         if (x86Function->isDecl) // Don't build external functions

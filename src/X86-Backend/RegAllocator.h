@@ -1,88 +1,114 @@
 #pragma once
-#include "src/X86-Backend/Expander.h"
-
+#include "src/X86-Backend/X86Def.h"
+#include <algorithm>
+#include <iostream>
+#include <set>
+#include <list>
 namespace jlc::x86 {
 
-class RegAllocator {
-    x86::Program& program;
+struct Range {
+    int start, end;
+};
 
-    struct Range {
-        int a, b;
-    };
-    std::vector<Range> interval[20]; // TODO: Yeah
+class RangeSet {
+
+    std::list<Range> ranges;
 
   public:
-    RegAllocator(x86::Program& input) : program(input) {}
-    void linearScan() {
-        buildLiveSets();
-        buildIntervals();
-        mergeAdjIntervals();
+    void pushRange(const Range& r) {
+        // Linear search
+        auto pos = std::find_if(ranges.begin(), ranges.end(),
+                                [r](Range& it) { return it.start >= r.start; });
+        ranges.insert(pos, r);
+        mergeRanges();
     }
+    void operator+=(const Range& r) { pushRange(r); }
 
-  private:
-    void mergeAdjIntervals() {
-        for (int i = 0; i < 20; i++) {
-            if (interval[i].empty())
-                continue;
-            int smallest = INT_MAX;
-            int largest = INT_MIN;
-            for (auto range : interval[i]) {
-                if (range.a < smallest)
-                    smallest = range.a;
-                if (range.b > largest)
-                    largest = range.b;
+    // Merges overlapping / adjacent ranges. i.e [1,3] + [2,4] -> [1,4]
+    void mergeRanges() {
+        if (ranges.empty())
+            return;
+
+        auto left = ranges.begin();
+        auto right = std::next(left);
+        while (right != ranges.end()) {
+            if (left->end < right->start) { // Not overlapping
+                left = std::next(left);
+                right = std::next(right);
+            } else if (left->end < right->end) { // If overlap, extend left->end if needed
+                left->end = right->end;
+                right = ranges.erase(right);
             }
-            interval[i] = std::vector<Range>{Range{smallest, largest}};
         }
     }
 
+    std::list<Range>::iterator begin() { return ranges.begin(); }
+    std::list<Range>::iterator end() { return ranges.end(); }
+};
+
+class RegAllocator {
+    x86::Function* fn;
+    std::vector<RangeSet> interval;
+
+  public:
+    explicit RegAllocator(x86::Function* input)
+        : fn(input), interval(input->blocks.back()->last()->n) {}
+    void linearScan() {
+        buildLiveSets();
+        buildIntervals();
+    }
+
+    void printIntervals() {
+        for (int i = 0; i < interval.size(); i++) {
+            std::cout << std::to_string(i) << ": ";
+            for (auto& rs : interval[i])
+                std::cout << "[" << rs.start << ", " << rs.end << "]";
+            std::cout << "\n";
+        }
+    }
+
+  private:
+    // Values live at the beginning of the block: Set(Operands) - Set(Assignments)
     void buildLiveSets() {
-        Function* main = program.functions.back();
-        for (auto b : main->blocks) {
-            std::vector<Instruction*> liveSet;
-            auto it = b->instructions.rbegin();
-            for (; it != b->instructions.rend(); ++it) { // For each inst in reverse
-                Instruction* inst = *it;
-                for (auto op : inst->operands()) {
+        for (auto b : fn->blocks) {
+            std::set<Instruction*> operands;
+            std::set<Instruction*> assignments;
+
+            for (auto inst : b->instructions) {
+                for (Value* op : inst->operands()) {
                     if (op->getType() == ValueType::INSTRUCTION)
-                        liveSet.push_back((Instruction*)op);
+                        operands.insert((Instruction*)op);
                 }
-                liveSet.erase(std::remove(liveSet.begin(), liveSet.end(), inst),
-                              liveSet.end());
             }
-            b->liveSet = std::move(liveSet);
+
+            std::set_difference(operands.begin(), operands.end(), assignments.begin(),
+                                assignments.end(),
+                                std::inserter(b->liveSet, b->liveSet.begin()));
         }
     }
 
     void addRange(Instruction* i, Block* b, int end) {
-        Range r = {};
-        if (b->first->n <= i->n && i->n <= b->last->n)
-            r = {i->n, end};
+        if (b->first()->n <= i->n && i->n <= b->last()->n)
+            interval[i->n] += {i->n, end};
         else
-            r = {b->first->n, end};
-        interval[i->n].push_back(r);
+            interval[i->n] += {b->first()->n, end};
     }
 
     void buildIntervals() {
-        Function* main = program.functions.back();
-        for (Block* b : main->blocks) {
-            std::vector<Instruction*> live;
-            for (auto succ : b->successors) {
-                live.insert(succ->liveSet.end(), succ->liveSet.begin(),
-                            succ->liveSet.end());
-            }
-            std::sort(live.begin(), live.end());
-            live.erase(std::unique(live.begin(), live.end()), live.end());
+        for (Block* b : fn->blocks) {
+            std::set<Instruction*> live;
+            for (Block* succ : b->successors)
+                live.insert(succ->liveSet.begin(), succ->liveSet.end());
 
-            for (auto inst : live)
-                addRange(inst, b, b->last->n + 1);
+            for (Instruction* inst : live)
+                addRange(inst, b, b->last()->n + 1);
 
             for (auto it = b->instructions.rbegin(); it != b->instructions.rend(); ++it) {
-                auto inst = *it;
-                live.erase(std::remove(live.begin(), live.end(), inst), live.end());
-                for (auto op : inst->operands()) {
+                Instruction* inst = *it;
+                live.erase(inst);
+                for (Value* op : inst->operands()) {
                     if (op->getType() == ValueType::INSTRUCTION) {
-                        live.push_back((Instruction*)op);
+                        live.insert((Instruction*)op);
                         addRange((Instruction*)op, b, inst->n);
                     }
                 }

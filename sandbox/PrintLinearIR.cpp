@@ -17,7 +17,7 @@ class OperandPrinter : public x86::Visitor {
     void visitX86StringLit(x86::StringLit* p) override { llvm::errs() << p->value; }
     void visitX86GlobalVar(x86::GlobalVar* p) override { llvm::errs() << p->name; }
     void visitX86SpecialReg(x86::Reg* p) override {
-        llvm::errs() << "%" << x86::X86RegNames[p->reg];
+        llvm::errs() << "%" << x86::RegNames[p->reg];
     }
     void visitX86IntConstant(x86::IntConstant* p) override {
         llvm::errs() << p->value;
@@ -27,7 +27,7 @@ class OperandPrinter : public x86::Visitor {
     }
     void visitX86Instruction(x86::Instruction* p) override {
         std::string targetReg =
-            (p->reg != -1) ? x86::X86RegNames[p->reg] : std::to_string(p->n);
+            (p->reg != -1) ? x86::RegNames[p->reg] : std::to_string(p->n);
         llvm::errs() << "%" << targetReg;
     }
 };
@@ -36,11 +36,13 @@ void printBlock(x86::Block* b) {
     OperandPrinter printer;
     for (auto inst : b->instructions) {
         std::string targetReg =
-            (inst->reg != -1) ? x86::X86RegNames[inst->reg] : std::to_string(inst->n);
+            (inst->reg != -1) ? x86::RegNames[inst->reg] : std::to_string(inst->n);
         llvm::errs() << inst->n << ": "
                      << "%" << targetReg << " = " << inst->getName() << " ";
-        if (inst->operands().empty())
+        if (inst->operands().empty()) {
+            llvm::errs() << "\n";
             continue;
+        }
         for (int i = 0; i < inst->operands().size() - 1; i++) {
             inst->operands()[i]->accept(&printer);
             llvm::errs() << ", ";
@@ -61,6 +63,7 @@ void printProgram(x86::Program& p) {
         if (!fn->isDecl)
             printBlock(fn->blocks.front());
     }
+    llvm::errs() << "\n";
 }
 
 int main(int argc, char** argv) {
@@ -99,6 +102,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    codegen.runLLVMOpt();
     llvm::Module& m = codegen.getModuleRef();
 
     x86::Expander expander(m);
@@ -109,8 +113,9 @@ int main(int argc, char** argv) {
 
     printProgram(p);
 
-    x86::RegAllocator regAllocator(p);
+    x86::RegAllocator regAllocator(p.functions.back());
     regAllocator.linearScan();
+    regAllocator.printIntervals();
 
     // x86::Emitter emitter(expander.getX86Program());
 

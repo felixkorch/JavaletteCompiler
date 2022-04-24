@@ -14,6 +14,7 @@ class Codegen {
 
     // Entry point of codegen!
     void run(bnfc::Prog* p);
+    void runLLVMOpt();
     llvm::Module& getModuleRef() { return *module_; }
 
   private:

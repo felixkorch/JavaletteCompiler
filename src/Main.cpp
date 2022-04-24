@@ -9,6 +9,8 @@ using namespace jlc::typechecker;
 using namespace jlc::codegen;
 namespace fs = std::filesystem;
 
+#define JLC_LLVM_OPT
+
 int main(int argc, char** argv) {
     FILE* input = nullptr;
 
@@ -45,6 +47,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+#ifdef JLC_LLVM_OPT
+    codegen.runLLVMOpt();
+#endif
     llvm::Module& m = codegen.getModuleRef();
     std::string out;
     llvm::raw_string_ostream outStream(out);

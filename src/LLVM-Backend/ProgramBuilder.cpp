@@ -1,5 +1,7 @@
 #include "ProgramBuilder.h"
 #include "ExpBuilder.h"
+#include "CodeGen.h"
+
 namespace jlc::codegen {
 
 /************  Some helper-visitors   ************/

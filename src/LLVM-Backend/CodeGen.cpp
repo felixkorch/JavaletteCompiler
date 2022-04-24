@@ -1,5 +1,9 @@
 #include "CodeGen.h"
 #include "ProgramBuilder.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/GVN.h"
 
 namespace jlc::codegen {
 
@@ -28,6 +32,17 @@ void Codegen::run(bnfc::Prog* p) {
     builder.Visit(p);
     for (auto& fn : module_->functions())
         removeUnreachableCode(fn);
+}
+
+void Codegen::runLLVMOpt() {
+    auto FPM = std::make_unique<llvm::legacy::FunctionPassManager>(module_.get());
+    FPM->add(llvm::createInstructionCombiningPass());
+    FPM->add(llvm::createReassociatePass());
+    FPM->add(llvm::createGVNPass());
+    FPM->add(llvm::createCFGSimplificationPass());
+    FPM->doInitialization();
+    for (auto &F : *module_)
+        FPM->run(F);
 }
 
 llvm::BasicBlock* Codegen::newBasicBlock() {

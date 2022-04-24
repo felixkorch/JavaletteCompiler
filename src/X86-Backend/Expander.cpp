@@ -1,7 +1,7 @@
 #include "src/X86-Backend/Expander.h"
 #include "src/Common/Util.h"
 #include "llvm/IR/Instruction.def"
-#include <sstream>
+#include "llvm/IR/Operator.h"
 
 namespace jlc::x86 {
 
@@ -51,18 +51,16 @@ void Expander::visitCall(const llvm::CallInst& i, Block* b) {
 }
 
 void Expander::visitAlloca(const llvm::AllocaInst& i, Block* b) {
-    Add* add = new Add(getNextID());
-    add->reg = RegID::esp;
+    auto* alloca = new Alloca(getNextID());
     int size = INT_SIZE;
     if (i.getType() == llvm::Type::getDoublePtrTy(c_)) {
         size = DOUBLE_SIZE;
     } else if (i.getType() == llvm::Type::getInt32PtrTy(c_)) {
         size = INT_SIZE;
     }
-    add->left = factory_.newIntConst(-size);
-    add->right = factory_.newReg(RegID::esp);
-    valueMap_.insert({(llvm::Value*)&i, add});
-    b->instructions.push_back(add);
+    alloca->size = size;
+    valueMap_.insert({(llvm::Value*)&i, alloca});
+    b->instructions.push_back(alloca);
 }
 
 void Expander::visitStore(const llvm::StoreInst& i, Block* b) {
@@ -100,20 +98,23 @@ void Expander::visitRet(const llvm::ReturnInst& i, Block* b) {
         b->instructions.push_back(mov);
     }
 
-    Mov* restoreESP = new Mov(getNextID());
-    restoreESP->from = factory_.newReg(RegID::ebp);
-    restoreESP->reg = RegID::esp;
+    // Only restore if not main
+    if(b->parent->name != "main") {
+        Mov* restoreESP = new Mov(getNextID());
+        restoreESP->from = factory_.newReg(RegID::ebp);
+        restoreESP->reg = RegID::esp;
+        b->instructions.push_back(restoreESP);
 
-    Pop* restoreEBP = new Pop(getNextID());
-    restoreEBP->target = factory_.newReg(RegID::ebp);
+        Pop* restoreEBP = new Pop(getNextID());
+        restoreEBP->target = factory_.newReg(RegID::ebp);
+        b->instructions.push_back(restoreEBP);
+    }
 
     Ret* ret = new Ret(getNextID());
     if (mov)
         ret->retVal = mov;
     valueMap_.insert({(llvm::Value*)&i, ret});
 
-    b->instructions.push_back(restoreESP);
-    b->instructions.push_back(restoreEBP);
     b->instructions.push_back(ret);
 }
 
@@ -175,7 +176,7 @@ void Expander::addGlobals() {
         auto* strLit = llvm::dyn_cast<llvm::ConstantDataArray>(g.getInitializer());
         auto* glb = new GlobalVar();
         glb->name = getGlobalID();
-        glb->pointingTo = new StringLit(strLit->getAsString());
+        glb->pointingTo = factory_.newStringLit(strLit->getAsString().str());
         x86Program_.globals.push_back(glb);
         globalMap_.insert({&g, glb});
     }
@@ -200,12 +201,14 @@ void Expander::buildFunctions() {
         // Insert BasicBlocks
         for (auto& bb : fn) {
             auto* x86Block = new Block;
+            x86Block->parent = x86Function;
             blockMap_.insert({&bb, x86Block});
             x86Function->blocks.push_back(x86Block);
         }
 
-        // Build preamble
-        buildPreamble(x86Function);
+        // Build preamble if not main
+        if(fn.getName() != "main")
+            buildPreamble(x86Function);
 
         for (auto& bb : fn) { // For each BasicBlock, build
             auto x86Block = blockMap_[&bb];
@@ -213,15 +216,13 @@ void Expander::buildFunctions() {
                 buildInstruction(inst, x86Block);
         }
 
-        // Set preds / succs / first / last
+        // Set preds / succs
         for (auto& bb : fn) {
             Block* b = blockMap_[&bb];
             for (auto* succ : successors(&bb))
                 b->successors.push_back(blockMap_[succ]);
             for (auto* pred : predecessors(&bb))
                 b->successors.push_back(blockMap_[pred]);
-            b->first = b->instructions.front();
-            b->last = b->instructions.back();
         }
     }
 }

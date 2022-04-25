@@ -37,8 +37,7 @@ enum class ValueType {
     DOUBLE_CONSTANT,
     STRING_LIT,
     INSTRUCTION,
-    REG,
-    STACK_SLOT
+    REG
 };
 
 inline constexpr int INT_SIZE = 4;
@@ -92,7 +91,7 @@ struct Instruction : public Value {
     int n;        // Unique instruction number
     int reg = -1; // Holds the register assigned to the instruction
 
-    explicit Instruction(int id) : n(id) {}
+    Instruction() = default;
     ~Instruction() override = default;
     ValueType getType() override { return ValueType::INSTRUCTION; }
     virtual const char* getName() = 0;
@@ -151,15 +150,19 @@ struct Program {
 
 struct Add : public Instruction {
     Value *left = nullptr, *right = nullptr;
-    explicit Add(int id) : Instruction(id) {}
     SmallVector<Value*> operands() override { return {left, right}; };
     const char* getName() override { return "Add"; }
+};
+
+struct And : public Instruction {
+    Value *left = nullptr, *right = nullptr;
+    SmallVector<Value*> operands() override { return {left, right}; };
+    const char* getName() override { return "And"; }
 };
 
 // Move between regs / memory
 struct Mov : public Instruction {
     Value *from = nullptr, *to = nullptr;
-    explicit Mov(int id) : Instruction(id) {}
     SmallVector<Value*> operands() override {
         return to ? SmallVector<Value*>{from, to} : SmallVector<Value*>{from};
     };
@@ -169,7 +172,6 @@ struct Mov : public Instruction {
 // Push to stack
 struct Push : public Instruction {
     Value* target = nullptr;
-    explicit Push(int id) : Instruction(id) {}
     SmallVector<Value*> operands() override { return {target}; };
     const char* getName() override { return "Push"; }
 };
@@ -177,7 +179,6 @@ struct Push : public Instruction {
 // Pop from stack
 struct Pop : public Instruction {
     Value* target = nullptr;
-    explicit Pop(int id) : Instruction(id) {}
     SmallVector<Value*> operands() override { return {target}; };
     const char* getName() override { return "Pop"; }
 };
@@ -186,34 +187,62 @@ struct Pop : public Instruction {
 struct Call : public Instruction {
     SmallVector<Value*> args;
     Function* target = nullptr;
-    explicit Call(int id) : Instruction(id) {}
     SmallVector<Value*> operands() override { return args; };
     const char* getName() override { return "Call"; }
+};
+
+struct CondBranch : public Instruction {
+    Value* cond = nullptr;
+    Block* target1 = nullptr;
+    Block* target2 = nullptr;
+    SmallVector<Value*> operands() override { return {cond}; };
+    const char* getName() override { return "CondBranch"; }
+};
+
+struct Branch : public Instruction {
+    Block* target = nullptr;
+    SmallVector<Value*> operands() override { return {}; };
+    const char* getName() override { return "Branch"; }
+};
+
+struct ICmp : public Instruction {
+    Value* op1 = nullptr;
+    Value* op2 = nullptr;
+    SmallVector<Value*> operands() override { return {op1, op2}; };
+    const char* getName() override { return "ICmp"; }
+};
+
+struct Xor : public Instruction {
+    Value* op1 = nullptr;
+    Value* op2 = nullptr;
+    SmallVector<Value*> operands() override { return {op1, op2}; };
+    const char* getName() override { return "Xor"; }
 };
 
 // Return
 struct Ret : public Instruction {
     Value* retVal = nullptr;
-    explicit Ret(int id) : Instruction(id) {}
     SmallVector<Value*> operands() override {
         return retVal ? SmallVector<Value*>{retVal} : SmallVector<Value*>{};
     };
     const char* getName() override { return "Ret"; }
 };
 
-// Used in reg-allocation
-struct PseudoPHI : public Instruction {
-    explicit PseudoPHI(int id) : Instruction(id) {}
-    SmallVector<Value*> operands() override { return {}; };
-    const char* getName() override { return "Pseudo-PHI"; }
+// Pseudo instruction used in reg-allocation
+struct PHI : public Instruction {
+    Value* op1 = nullptr;
+    Value* op2 = nullptr;
+    Block* from1 = nullptr;
+    Block* from2 = nullptr;
+    SmallVector<Value*> operands() override { return {op1, op2}; };
+    const char* getName() override { return "PHI"; }
 };
 
-// Pseudo instruction
+// Pseudo instruction used in code-gen
 struct Alloca : public Instruction {
     int size = INT_SIZE;
-    explicit Alloca(int id) : Instruction(id) {}
     SmallVector<Value*> operands() override { return {}; };
-    const char* getName() override { return "Stack-Alloc"; }
+    const char* getName() override { return "Alloca"; }
 };
 
 // Just to clean memory of non-instruction values

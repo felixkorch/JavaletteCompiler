@@ -21,17 +21,18 @@ ValueType Expander::convertType(llvm::Value* a) {
 Value* Expander::getConstOrAssigned(llvm::Value* v) {
     if (convertType(v) == ValueType::INT_CONSTANT) { // Const int
         auto* num = (llvm::ConstantInt*)v;
-        return new IntConstant((int)num->getSExtValue());
+        return factory_.newIntConst((int)num->getSExtValue());
     } else if (convertType(v) == ValueType::DOUBLE_CONSTANT) { // Const double
         auto* num = (llvm::ConstantFP*)v;
-        return new DoubleConstant(num->getValue().convertToFloat());
+        return factory_.newDoubleConst(num->getValue().convertToFloat());
     }
+
     return valueMap_[v];
 }
 
 // TODO: Tidy up this fn
 void Expander::visitCall(const llvm::CallInst& i, Block* b) {
-    Call* call = new Call(getNextID());
+    Call* call = new Call;
     llvm::Function* target = i.getCalledFunction();
     for (auto& a : i.args()) {
         if (auto* gep = llvm::dyn_cast<llvm::GEPOperator>(a)) {
@@ -51,7 +52,7 @@ void Expander::visitCall(const llvm::CallInst& i, Block* b) {
 }
 
 void Expander::visitAlloca(const llvm::AllocaInst& i, Block* b) {
-    auto* alloca = new Alloca(getNextID());
+    auto* alloca = new Alloca;
     int size = INT_SIZE;
     if (i.getType() == llvm::Type::getDoublePtrTy(c_)) {
         size = DOUBLE_SIZE;
@@ -64,7 +65,7 @@ void Expander::visitAlloca(const llvm::AllocaInst& i, Block* b) {
 }
 
 void Expander::visitStore(const llvm::StoreInst& i, Block* b) {
-    Mov* mov = new Mov(getNextID());
+    Mov* mov = new Mov;
     llvm::Value* from = i.getOperand(0);
     llvm::Value* to = i.getOperand(1);
     mov->from = getConstOrAssigned(from);
@@ -74,43 +75,72 @@ void Expander::visitStore(const llvm::StoreInst& i, Block* b) {
 }
 
 void Expander::visitLoad(const llvm::LoadInst& i, Block* b) {
-    Mov* mov = new Mov(getNextID());
+    Mov* mov = new Mov;
     llvm::Value* from = i.getOperand(0);
-    mov->from = valueMap_[from];
+    mov->from = getConstOrAssigned(from);
     valueMap_.insert({(llvm::Value*)&i, mov});
     b->instructions.push_back(mov);
 }
 
-void Expander::visitICmp(const llvm::ICmpInst& i, Block* b) {}
+void Expander::visitICmp(const llvm::ICmpInst& i, Block* b) {
+    ICmp* cmp = new ICmp;
+    cmp->op1 = getConstOrAssigned(i.getOperand(0));
+    cmp->op2 = getConstOrAssigned(i.getOperand(1));
+    valueMap_.insert({(llvm::Value*)&i, cmp});
+    b->instructions.push_back(cmp);
+}
 
-void Expander::visitBr(const llvm::BranchInst& i, Block* b) {}
+void Expander::visitBr(const llvm::BranchInst& i, Block* b) {
+    if(i.isConditional()) {
+        CondBranch* br = new CondBranch;
+        br->cond = getConstOrAssigned(i.getCondition());
+        br->target1 = blockMap_[i.getSuccessor(0)];
+        br->target2 = blockMap_[i.getSuccessor(1)];
+        valueMap_.insert({(llvm::Value*)&i, br});
+        b->instructions.push_back(br);
+    }else {
+        Branch* br = new Branch;
+        br->target = blockMap_[i.getSuccessor(0)];
+        valueMap_.insert({(llvm::Value*)&i, br});
+        b->instructions.push_back(br);
+    }
+}
 
-void Expander::visitXor(const llvm::BinaryOperator& i, Block* b) {}
+void Expander::visitXor(const llvm::BinaryOperator& i, Block* b) {
+    Xor* XOR = new Xor;
+    XOR->op1 = getConstOrAssigned(i.getOperand(0));
+    XOR->op2 = getConstOrAssigned(i.getOperand(1));
+    valueMap_.insert({(llvm::Value*)&i, XOR});
+    b->instructions.push_back(XOR);
+}
 
 void Expander::visitRet(const llvm::ReturnInst& i, Block* b) {
     Mov* mov = nullptr;
     if (i.getNumOperands() > 0) { // Non-void: Move ret-val to %eax, then return
-        mov = new Mov(getNextID());
+        mov = new Mov;
         llvm::Value* retVal = i.getReturnValue();
         Value* x86RetVal = getConstOrAssigned(retVal);
         mov->from = x86RetVal;
         mov->reg = RegID::eax; // Store result in %eax
+        valueMap_.insert({(llvm::Value*)&i, mov});
         b->instructions.push_back(mov);
     }
 
     // Only restore if not main
     if(b->parent->name != "main") {
-        Mov* restoreESP = new Mov(getNextID());
+        Mov* restoreESP = new Mov;
         restoreESP->from = factory_.newReg(RegID::ebp);
         restoreESP->reg = RegID::esp;
+        valueMap_.insert({(llvm::Value*)&i, restoreESP});
         b->instructions.push_back(restoreESP);
 
-        Pop* restoreEBP = new Pop(getNextID());
+        Pop* restoreEBP = new Pop;
         restoreEBP->target = factory_.newReg(RegID::ebp);
+        valueMap_.insert({(llvm::Value*)&i, restoreEBP});
         b->instructions.push_back(restoreEBP);
     }
 
-    Ret* ret = new Ret(getNextID());
+    Ret* ret = new Ret;
     if (mov)
         ret->retVal = mov;
     valueMap_.insert({(llvm::Value*)&i, ret});
@@ -119,21 +149,35 @@ void Expander::visitRet(const llvm::ReturnInst& i, Block* b) {
 }
 
 void Expander::visitAdd(const llvm::BinaryOperator& i, Block* b) {
-    Add* add = new Add(getNextID());
-    Value* left = getConstOrAssigned(i.getOperand(0));
-    Value* right = getConstOrAssigned(i.getOperand(1));
+    Add* add = new Add;
+    add->left = getConstOrAssigned(i.getOperand(0));
+    add->right = getConstOrAssigned(i.getOperand(1));
     valueMap_.insert({(llvm::Value*)&i, add});
     b->instructions.push_back(add);
 }
 
 void Expander::visitPHI(const llvm::PHINode& i, Block* b) {
-    auto* phi = new PseudoPHI(getNextID());
+    auto* phi = new PHI;
+    phi->op1 = getConstOrAssigned(i.getOperand(0));
+    phi->op2 = getConstOrAssigned(i.getOperand(1));
+    phi->from1 = blockMap_[i.getIncomingBlock(0)];
+    phi->from2 = blockMap_[i.getIncomingBlock(1)];
     static bool firstPHI = true; // TODO: Doesn't work in parallel
     b->firstPHI = phi;
+    valueMap_.insert({(llvm::Value*)&i, phi});
     b->instructions.push_back(phi);
 }
 
+void Expander::visitAnd(const llvm::BinaryOperator& i, Block* b) {
+    And* AND = new And;
+    AND->left = getConstOrAssigned(i.getOperand(0));
+    AND->right = getConstOrAssigned(i.getOperand(1));
+    valueMap_.insert({(llvm::Value*)&i, AND});
+    b->instructions.push_back(AND);
+}
+
 void Expander::buildInstruction(llvm::Instruction& i, Block* b) {
+    std::string debugName = i.getOpcodeName();
     switch (i.getOpcode()) {
     default: llvm_unreachable("Unknown instruction type encountered!");
     case llvm::Instruction::Call: visitCall((const llvm::CallInst&)i, b); break;
@@ -146,14 +190,16 @@ void Expander::buildInstruction(llvm::Instruction& i, Block* b) {
     case llvm::Instruction::Ret: visitRet((const llvm::ReturnInst&)i, b); break;
     case llvm::Instruction::PHI: visitPHI((const llvm::PHINode&)i, b); break;
     case llvm::Instruction::Add: visitAdd((const llvm::BinaryOperator&)i, b); break;
+    case llvm::Instruction::And: visitAnd((const llvm::BinaryOperator&)i, b); break;
+    //case llvm::Instruction::UnaryOpsBegin: visitAnd((const llvm::BinaryOperator&)i, b); break;
     }
 }
 
 void Expander::buildPreamble(Function* f) {
     auto entry = f->blocks.front();
-    Push* pushEBP = new Push(getNextID());
+    Push* pushEBP = new Push;
     pushEBP->target = factory_.newReg(RegID::ebp);
-    Mov* setEBP = new Mov(getNextID());
+    Mov* setEBP = new Mov;
     setEBP->from = factory_.newReg(RegID::esp);
     setEBP->reg = RegID::ebp;
     entry->instructions.push_back(pushEBP);
@@ -161,7 +207,7 @@ void Expander::buildPreamble(Function* f) {
 }
 
 Expander::Expander(llvm::Module& m)
-    : m_(m), c_(m.getContext()), uniqueID_(0), globalID_(0) {}
+    : m_(m), c_(m.getContext()), globalID_(0) {}
 
 void Expander::run() {
     addGlobals();

@@ -53,6 +53,7 @@ void printBlock(x86::Block* b) {
 }
 
 void printProgram(x86::Program& p) {
+    llvm::errs() << "\n\n";
     for (auto glb : p.globals) {
         auto* target = (x86::StringLit*)glb->pointingTo;
         llvm::errs() << glb->name << ": " << target->value << "\n";
@@ -60,8 +61,13 @@ void printProgram(x86::Program& p) {
     llvm::errs() << "\n";
 
     for (auto fn : p.functions) {
-        if (!fn->isDecl)
-            printBlock(fn->blocks.front());
+        if (!fn->isDecl) {
+            for(x86::Block* b : fn->blocks) {
+                llvm::errs() << "--Block--\n";
+                printBlock(b);
+                llvm::errs() << "\n";
+            }
+        }
     }
     llvm::errs() << "\n";
 }
@@ -102,7 +108,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    codegen.runLLVMOpt();
+    //codegen.runLLVMOpt();
     llvm::Module& m = codegen.getModuleRef();
 
     x86::Expander expander(m);
@@ -111,11 +117,10 @@ int main(int argc, char** argv) {
     x86::Module x86Module = expander.getX86Module();
     x86::Program& p = x86Module.getProgram();
 
-    printProgram(p);
-
     x86::RegAllocator regAllocator(p.functions.back());
     regAllocator.linearScan();
     regAllocator.printIntervals();
+    printProgram(p);
 
     // x86::Emitter emitter(expander.getX86Program());
 

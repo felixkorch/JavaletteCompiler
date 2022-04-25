@@ -11,7 +11,6 @@ class Expander {
     ValueFactory factory_;
     llvm::Module& m_;
     llvm::LLVMContext& c_;
-    int uniqueID_;
     int globalID_;
 
     // These maps llvm domain -> X86 domain
@@ -32,6 +31,7 @@ class Expander {
     void visitRet(const llvm::ReturnInst& i, Block* b);
     void visitPHI(const llvm::PHINode& i, Block* b);
     void visitAdd(const llvm::BinaryOperator& i, Block* b);
+    void visitAnd(const llvm::BinaryOperator& i, Block* b);
 
     void addGlobals();
     void addFunctionDecls();
@@ -41,8 +41,6 @@ class Expander {
 
     ValueType convertType(llvm::Value* v);
     Value* getConstOrAssigned(llvm::Value* v);
-    int getNextID() { return uniqueID_++; }
-    void resetID() { uniqueID_ = 0; }
     std::string getGlobalID() { return "@" + std::to_string(globalID_++); }
 
   public:

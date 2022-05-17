@@ -1,31 +1,41 @@
 #pragma once
-#include "src/X86-Backend/X86Def.h"
+#include "src/LLVM-Backend/CodeGen.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Operator.h"
 #include <algorithm>
 #include <iostream>
 #include <list>
 #include <set>
+#include <utility>
 namespace jlc::x86 {
 
+enum RegID { eax = 0, ebx, ecx, edx, esp, ebp, esi, edi };
+static const char* RegNames[] = {"eax", "ebx", "ecx", "edx", "esp", "ebp", "esi", "edi"};
+
+// Represents a live-range or a sub-live-range.
 struct Range {
     int start, end;
 };
 
+// Container for ranges, with automatic merging of ranges that overlap.
+// Keeps the list of ranges sorted for very efficient merging.
 class RangeSet {
-
     std::list<Range> ranges;
 
   public:
+    RangeSet(std::list<Range> l) : ranges(std::move(l)) {}
     void pushRange(const Range& r) {
         // Linear search
         auto pos = std::find_if(ranges.begin(), ranges.end(),
                                 [r](Range& it) { return it.start >= r.start; });
         ranges.insert(pos, r);
-        mergeRanges();
+        mergeOverlapping();
     }
     void operator+=(const Range& r) { pushRange(r); }
 
     // Merges overlapping / adjacent ranges. i.e [1,3] + [2,4] + [5, 7] -> [1,4] [5,7]
-    void mergeRanges() {
+    void mergeOverlapping() {
         if (ranges.empty())
             return;
 
@@ -42,130 +52,102 @@ class RangeSet {
         }
     }
 
+    void drop() {
+        ranges = {};
+    }
+
+    RangeSet Intersect(RangeSet& other) {
+        std::list<Range> result(ranges.size());
+        std::set_intersection(other.ranges.begin(), other.ranges.end(), ranges.begin(),
+                              ranges.end(), std::back_inserter(result));
+        return {result};
+    }
+
+    RangeSet Union(RangeSet& other) {
+        std::list<Range> result(ranges.size());
+        std::set_union(other.ranges.begin(), other.ranges.end(), ranges.begin(),
+                              ranges.end(), std::back_inserter(result));
+        return {result};
+    }
+
+    class Empty {
+    };
+
+    static Empty EmptySet() { return {}; };
+
+    bool operator == (Empty e) {
+        return true;
+    }
+
     std::list<Range>::iterator begin() { return ranges.begin(); }
     std::list<Range>::iterator end() { return ranges.end(); }
 };
 
-class RegAllocator {
-    x86::Function* fn;
-    std::vector<RangeSet> interval;
+// Extra information about the llvm-instructions that is needed during reg-allocation.
+struct TargetInstruction {
+    llvm::Instruction* llvmInstr;        // Points to the llvm instruction
+    int n;                               // Unique instruction number
+    int reg = -1;                        // Placeholder
+    llvm::Instruction* join = llvmInstr; // Representative
+};
+
+struct TargetBlock {
+    std::set<llvm::Instruction*> liveSet; // Set of live variables at beginning of block.
+};
+
+class TargetInstructionMap {
+    std::unordered_map<llvm::Instruction*, TargetInstruction> map_;
 
   public:
-    explicit RegAllocator(x86::Function* input) : fn(input) {}
-    void linearScan() {
-        genMoves();           // For PHI-nodes
-        numberInstructions(); // Assign a unique ID to each instruction
-        interval.resize(fn->blocks.back()->last()->n);
-        buildLiveSets();
-        buildIntervals();
-    }
+    TargetInstruction& operator[](llvm::Instruction* i) { return map_[i]; }
+    void insert(llvm::Instruction* i, int n) { map_.insert({i, {i, n, -1}}); }
+};
 
-    void printIntervals() {
-        for (int i = 0; i < interval.size(); i++) {
-            std::cout << std::to_string(i) << ": ";
-            for (auto& rs : interval[i])
-                std::cout << "[" << rs.start << ", " << rs.end << "]";
-            std::cout << "\n";
-        }
-    }
+class TargetBlockMap {
+    std::unordered_map<llvm::BasicBlock*, TargetBlock> map_;
+
+  public:
+    TargetBlock& operator[](llvm::BasicBlock* b) { return map_[b]; }
+    void insert(llvm::BasicBlock* b, TargetBlock& set) { map_.insert({b, set}); }
+};
+
+class RegAllocator {
+    codegen::LLVMModule& mod;
+    llvm::Function* fn;
+    std::vector<RangeSet> interval;
+    TargetInstructionMap instr;
+    TargetBlockMap block;
+
+  public:
+    explicit RegAllocator(codegen::LLVMModule& input);
+    void linearScan();
+    void printIntervals();
+    TargetInstructionMap& getInstructionMap() { return instr; }
 
   private:
-    void numberInstructions() {
-        int ID = 0;
-        std::unordered_map<Block*, bool> handled;
-        auto numberBlock = [&ID, &handled](Block* b) {
-            for (Instruction* i : b->instructions)
-                i->n = ID++;
-            handled.insert({b, true});
-        };
-        for (Block* b : fn->blocks) {
-            for (Block* pred : b->predecessors) {
-                if (handled.count(pred) == 0)
-                    numberBlock(pred);
-            }
-            if (handled.count(b) == 0)
-                numberBlock(b);
-        }
-    }
+    // Step 1: Generate moves in predecessors of block 'b' if PHI-nodes exist.
+    void genMoves();
 
-    void genMoves() {
-        for (Block* b : fn->blocks) {
-            if (b->firstPHI == nullptr)
-                continue;
-            for (Block* pred : b->predecessors) {
-                Block* newBlock = nullptr;
-                PHI* phi = (PHI*)b->firstPHI;
-                // Insert new block so that there is a branch directly to PHI-node
-                if (b->predecessors.size() > 1 && pred->successors.size() > 1) {
-                    newBlock = new Block;
-                    auto findB =
-                        std::find(pred->successors.begin(), pred->successors.end(), b);
-                    *findB = newBlock;
-                    CondBranch* br = (CondBranch*)pred->last();
-                    if (br->target1 == b)
-                        br->target1 = newBlock;
-                    else
-                        br->target2 = newBlock;
-                    Branch* insertBranchToB = new Branch;
-                    insertBranchToB->target = b;
-                } else {
-                    newBlock = pred;
-                }
-                Mov* mov = new Mov;
-                mov->from = phi->from1 == pred ? phi->op1 : phi->op2;
-                auto insertPos = std::prev(newBlock->instructions.end());
-                newBlock->instructions.insert(insertPos, mov);
-            }
-        }
-    }
+    // Step 2: Give every instruction a number n. Visit blocks in topological order.
+    int numberInstructions();
 
-    // Values live at the beginning of the block: Set(Operands) - Set(Assignments)
-    void buildLiveSets() {
-        for (auto b : fn->blocks) {
-            std::set<Instruction*> operands;
-            std::set<Instruction*> assignments;
+    // Step 3: Build the sets of values that are alive at the beginning of each block.
+    void buildLiveSets();
 
-            for (Instruction* inst : b->instructions) {
-                assignments.insert(inst);
-                for (Value* op : inst->operands()) {
-                    if (op->getType() == ValueType::INSTRUCTION)
-                        operands.insert((Instruction*)op);
-                }
-            }
+    // Step 4: Build the intervals by finding all sub-live-ranges of values.
+    void buildIntervals();
 
-            std::set_difference(operands.begin(), operands.end(), assignments.begin(),
-                                assignments.end(),
-                                std::inserter(b->liveSet, b->liveSet.begin()));
-        }
-    }
+    // Helper: Adds live-range to the set of live-ranges of instruction i.
+    void addRange(llvm::Instruction* i, llvm::BasicBlock* b, int end);
 
-    void addRange(Instruction* i, Block* b, int end) {
-        if (b->first()->n <= i->n && i->n <= b->last()->n) // If defined in block
-            interval[i->n] += {i->n, end};
-        else
-            interval[i->n] += {b->first()->n, end};
-    }
+    // Helper: Joins values x & y if they are compatible.
+    void join(llvm::Instruction* x, llvm::Instruction* y);
 
-    void buildIntervals() {
-        for (Block* b : fn->blocks) {
-            std::set<Instruction*> live;
-            // Live at end(b) = union(live at start of succs)
-            for (Block* succ : b->successors)
-                live.insert(succ->liveSet.begin(), succ->liveSet.end());
+    // Helper: Recursively find the representative of a value.
+    llvm::Instruction* rep(llvm::Instruction* x);
 
-            // Add ranges for live at end(b)
-            for (Instruction* inst : live)
-                addRange(inst, b, b->last()->n + 1);
-
-            for (auto it = b->instructions.rbegin(); it != b->instructions.rend(); ++it) {
-                Instruction* inst = *it;
-                for (Value* op : inst->operands()) {
-                    if (op->getType() == ValueType::INSTRUCTION)
-                        addRange((Instruction*)op, b, inst->n);
-                }
-            }
-        }
-    }
+    // Helper: Returns true if x and y is compatible
+    bool compatible(llvm::Instruction* x, llvm::Instruction* y) { return true; }
 };
 
 } // namespace jlc::x86

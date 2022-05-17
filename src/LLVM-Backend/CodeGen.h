@@ -8,6 +8,12 @@
 
 namespace jlc::codegen {
 
+struct LLVMModule {
+    std::unique_ptr<llvm::IRBuilder<>> builder;
+    std::unique_ptr<llvm::LLVMContext> context;
+    std::unique_ptr<llvm::Module> module;
+};
+
 class Codegen {
   public:
     Codegen(const std::string& moduleName = std::string());
@@ -15,7 +21,9 @@ class Codegen {
     // Entry point of codegen!
     void run(bnfc::Prog* p);
     void runLLVMOpt();
-    llvm::Module& getModuleRef() { return *module_; }
+    LLVMModule getLLVMModule() {
+        return {std::move(builder_), std::move(context_), std::move(module_)};
+    }
 
   private:
     // These visitors need access to the codegen-environment and are therefore friends.

@@ -30,12 +30,12 @@ class RangeSet {
         auto pos = std::find_if(ranges.begin(), ranges.end(),
                                 [r](Range& it) { return it.start >= r.start; });
         ranges.insert(pos, r);
-        mergeRanges();
+        mergeOverlapping();
     }
     void operator+=(const Range& r) { pushRange(r); }
 
     // Merges overlapping / adjacent ranges. i.e [1,3] + [2,4] + [5, 7] -> [1,4] [5,7]
-    void mergeRanges() {
+    void mergeOverlapping() {
         if (ranges.empty())
             return;
 

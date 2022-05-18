@@ -1,12 +1,36 @@
 
+function find_replace()
+    --
+    --  Read the file
+    --
+    local f = io.open("bnfc/Javalette.y", "r")
+    local content = f:read("*all")
+    f:close()
+
+    --
+    -- Edit the string
+    --
+    content = string.gsub(content, "error:", "ERROR:")
+    content = string.gsub(content, "Bison.H", "bnfc/Bison.H")
+
+    --
+    -- Write it out
+    --
+    local f = io.open("bnfc/Javalette.y", "w")
+    f:write(content)
+    f:close()
+end
+
 function gen()
-    os.execute("bnfc -l -p bnfc --cpp -o bnfc src/Frontend/Javalette.cf && cp -f src/Frontend/Javalette.y bnfc/")
+    os.execute("bnfc -l -p bnfc --cpp -o bnfc src/Frontend/Javalette.cf")
+    find_replace()
+    os.execute("cp -f bnfc/Javalette.y src/Frontend/")
     os.execute("bnfc --latex -o bnfc src/Frontend/Javalette.cf")
     os.execute("flex -Pjavalette_ -o bnfc/Lexer.C bnfc/Javalette.l")
     os.execute("bison -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C")
 end
 
-local install_name = "partB-1.tar.gz" -- Update each iteration
+local install_name = "partC-1.tar.gz" -- Update each iteration
 
 local function parse_args(args)
     if #args ~= 1 then

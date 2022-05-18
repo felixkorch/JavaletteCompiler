@@ -16,7 +16,11 @@ static const char* RegNames[] = {"eax", "ebx", "ecx", "edx", "esp", "ebp", "esi"
 // Represents a live-range or a sub-live-range.
 struct Range {
     int start, end;
+
+    friend bool operator<(Range& LHS, Range& RHS);
 };
+
+inline bool operator<(Range& LHS, Range& RHS) { return LHS.end < RHS.start; }
 
 // Container for ranges, with automatic merging of ranges that overlap.
 // Keeps the list of ranges sorted for very efficient merging.
@@ -24,7 +28,16 @@ class RangeSet {
     std::list<Range> ranges;
 
   public:
+    RangeSet() {}
     RangeSet(std::list<Range> l) : ranges(std::move(l)) {}
+    /*
+    RangeSet& operator=(RangeSet& other) {
+        if (this == &other)
+            return *this;
+        ranges = other.ranges;
+        return *this;
+    } */
+
     void pushRange(const Range& r) {
         // Linear search
         auto pos = std::find_if(ranges.begin(), ranges.end(),
@@ -52,32 +65,31 @@ class RangeSet {
         }
     }
 
-    void drop() {
-        ranges = {};
-    }
+    void drop() { ranges = {}; }
 
+    // The set of ranges which overlap between two range-sets.
+    // Used to check whether two sets have overlapping ranges.
     RangeSet Intersect(RangeSet& other) {
-        std::list<Range> result(ranges.size());
+        std::list<Range> result;
         std::set_intersection(other.ranges.begin(), other.ranges.end(), ranges.begin(),
                               ranges.end(), std::back_inserter(result));
         return {result};
     }
 
+    // The set of ranges which are non-overlapping in two range-sets.
+    // Only useful when intersect is empty.
     RangeSet Union(RangeSet& other) {
-        std::list<Range> result(ranges.size());
+        std::list<Range> result;
         std::set_union(other.ranges.begin(), other.ranges.end(), ranges.begin(),
-                              ranges.end(), std::back_inserter(result));
+                       ranges.end(), std::back_inserter(result));
         return {result};
     }
 
-    class Empty {
-    };
+    class Empty {};
 
     static Empty EmptySet() { return {}; };
 
-    bool operator == (Empty e) {
-        return true;
-    }
+    bool operator==(Empty e) { return ranges.empty(); }
 
     std::list<Range>::iterator begin() { return ranges.begin(); }
     std::list<Range>::iterator end() { return ranges.end(); }

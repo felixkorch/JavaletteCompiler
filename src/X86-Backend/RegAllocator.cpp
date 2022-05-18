@@ -127,7 +127,7 @@ void RegAllocator::buildIntervals() {
 void RegAllocator::join(llvm::Instruction* x, llvm::Instruction* y) {
     RangeSet& i = interval[instr[rep(x)].n]; // Range-set of the rep(x)
     RangeSet& j = interval[instr[rep(y)].n]; // Range-set of the rep(y)
-    if(i.Intersect(j) == RangeSet::EmptySet() && compatible(x, y)) {
+    if (i.Intersect(j) == RangeSet::EmptySet() && compatible(x, y)) {
         j = i.Union(j);
         i.drop(); // TODO: Might need to delete from interval array instead
         instr[x].join = rep(y);

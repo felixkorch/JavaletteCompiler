@@ -76,7 +76,7 @@ extern yyscan_t bnfc_initialize_lexer(FILE * inp);
 %{
 void yyerror(YYLTYPE *loc, yyscan_t scanner, YYSTYPE *result, const char *msg)
 {
-  fprintf(stderr, "ERROR:%d,%d: %s at %s\n",
+  fprintf(stderr, "ERROR: %d,%d: %s at %s\n",
     loc->first_line, loc->first_column, msg, bnfcget_text(scanner));
 }
 

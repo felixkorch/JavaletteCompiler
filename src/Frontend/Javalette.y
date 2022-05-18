@@ -76,7 +76,7 @@ extern yyscan_t bnfc_initialize_lexer(FILE * inp);
 %{
 void yyerror(YYLTYPE *loc, yyscan_t scanner, YYSTYPE *result, const char *msg)
 {
-  fprintf(stderr, "ERROR:%d,%d: %s at %s\n",
+  fprintf(stderr, "ERROR: %d,%d: %s at %s\n",
     loc->first_line, loc->first_column, msg, bnfcget_text(scanner));
 }
 
@@ -98,7 +98,9 @@ extern int yylex(YYSTYPE *lvalp, YYLTYPE *llocp, yyscan_t scanner);
 %token          _COMMA       /* , */
 %token          _MINUS       /* - */
 %token          _DMINUS      /* -- */
+%token          _DOT         /* . */
 %token          _SLASH       /* / */
+%token          _COLON       /* : */
 %token          _SEMI        /* ; */
 %token          _LT          /* < */
 %token          _LDARROW     /* <= */
@@ -106,12 +108,18 @@ extern int yylex(YYSTYPE *lvalp, YYLTYPE *llocp, yyscan_t scanner);
 %token          _DEQ         /* == */
 %token          _GT          /* > */
 %token          _GTEQ        /* >= */
+%token          _LBRACK      /* [ */
+%token          _EMPTYBRACK  /* [] */
+%token          _RBRACK      /* ] */
 %token          _KW_boolean  /* boolean */
 %token          _KW_double   /* double */
 %token          _KW_else     /* else */
 %token          _KW_false    /* false */
+%token          _KW_for      /* for */
 %token          _KW_if       /* if */
 %token          _KW_int      /* int */
+%token          _KW_length   /* length */
+%token          _KW_new      /* new */
 %token          _KW_return   /* return */
 %token          _KW_true     /* true */
 %token          _KW_void     /* void */
@@ -174,6 +182,7 @@ Stmt : _SEMI { $$ = new bnfc::Empty(); $$->line_number = @$.first_line; $$->char
   | Blk { $$ = new bnfc::BStmt($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | Type ListItem _SEMI { std::reverse($2->begin(),$2->end()) ;$$ = new bnfc::Decl($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ _EQ Expr _SEMI { $$ = new bnfc::Ass($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | _IDENT_ _LBRACK Expr _RBRACK _EQ Expr _SEMI { $$ = new bnfc::ArrAss($1, $3, $6); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ _DPLUS _SEMI { $$ = new bnfc::Incr($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ _DMINUS _SEMI { $$ = new bnfc::Decr($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_return Expr _SEMI { $$ = new bnfc::Ret($2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
@@ -181,6 +190,7 @@ Stmt : _SEMI { $$ = new bnfc::Empty(); $$->line_number = @$.first_line; $$->char
   | _KW_if _LPAREN Expr _RPAREN Stmt { $$ = new bnfc::Cond($3, $5); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_if _LPAREN Expr _RPAREN Stmt _KW_else Stmt { $$ = new bnfc::CondElse($3, $5, $7); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_while _LPAREN Expr _RPAREN Stmt { $$ = new bnfc::While($3, $5); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | _KW_for _LPAREN Type _IDENT_ _COLON Expr _RPAREN Stmt { $$ = new bnfc::For($3, $4, $6, $8); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | Expr _SEMI { $$ = new bnfc::SExp($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
 ;
 Item : _IDENT_ { $$ = new bnfc::NoInit($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
@@ -193,6 +203,7 @@ Type : _KW_int { $$ = new bnfc::Int(); $$->line_number = @$.first_line; $$->char
   | _KW_double { $$ = new bnfc::Doub(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_boolean { $$ = new bnfc::Bool(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_void { $$ = new bnfc::Void(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | Type _EMPTYBRACK { $$ = new bnfc::Arr($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
 ;
 ListType : /* empty */ { $$ = new bnfc::ListType(); }
   | Type { $$ = new bnfc::ListType(); $$->push_back($1); }
@@ -203,6 +214,9 @@ Expr6 : _IDENT_ { $$ = new bnfc::EVar($1); $$->line_number = @$.first_line; $$->
   | _DOUBLE_ { $$ = new bnfc::ELitDoub($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_true { $$ = new bnfc::ELitTrue(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_false { $$ = new bnfc::ELitFalse(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | _IDENT_ _LBRACK Expr _RBRACK { $$ = new bnfc::EArr($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | _IDENT_ _DOT _KW_length { $$ = new bnfc::EArrLen($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | _KW_new Type _LBRACK Expr _RBRACK { $$ = new bnfc::EArrNew($2, $4); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ _LPAREN ListExpr _RPAREN { std::reverse($3->begin(),$3->end()) ;$$ = new bnfc::EApp($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _STRING_ { $$ = new bnfc::EString($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _LPAREN Expr _RPAREN { $$ = $2; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }

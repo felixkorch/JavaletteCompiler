@@ -78,7 +78,10 @@ void StatementChecker::visitListStmt(ListStmt* p) {
 }
 
 void StatementChecker::visitBStmt(BStmt* p) {
-    env_.enterScope();
+    if (env_.isForBlock())
+        env_.exitFor();
+    else
+        env_.enterScope();
     Visit(p->blk_);
     env_.exitScope();
 }
@@ -136,6 +139,25 @@ void StatementChecker::visitWhile(While* p) {
     Visit(p->stmt_);
 }
 
+void StatementChecker::visitFor(For* p) {
+    ETyped* exprTyped = infer(p->expr_, env_);
+
+    if (typecode(exprTyped) != TypeCode::ARRAY)
+        throw TypeError("Expr in for-loop has to be of array-type", p->line_number,
+                        p->char_number);
+
+    if (typecode(exprTyped) != typecode(p->type_)) { // iterator not matching arr-type
+        throw TypeError("Iterator must match type of array", p->line_number,
+                        p->char_number);
+    }
+
+    env_.enterFor();
+    env_.addVar(p->ident_, typecode(p->type_));
+
+    p->expr_ = exprTyped;
+    Visit(p->stmt_);
+}
+
 void StatementChecker::visitBlock(Block* p) {
     for (Stmt* stmt : *p->liststmt_)
         Visit(stmt);
@@ -147,15 +169,34 @@ void StatementChecker::visitDecl(Decl* p) {
 }
 
 void StatementChecker::visitAss(Ass* p) {
-    TypeCode assignType = env_.findVar(p->ident_, p->line_number, p->char_number);
-    ETyped* exprTyped = infer(p->expr_, env_);
+    TypeCode varType = env_.findVar(p->ident_, p->line_number, p->char_number);
+    ETyped* RHSExpr = infer(p->expr_, env_);
 
-    if (assignType != typecode(exprTyped)) {
-        throw TypeError("Expr has type " + toString(exprTyped) + ", expected " +
-                            toString(assignType) + " for variable " + p->ident_,
+    if (varType != typecode(RHSExpr)) {
+        throw TypeError("Expr has type " + toString(RHSExpr) + ", expected " +
+                            toString(varType) + " for variable " + p->ident_,
                         p->line_number, p->char_number);
     }
-    p->expr_ = exprTyped;
+    p->expr_ = RHSExpr;
+}
+
+void StatementChecker::visitArrAss(ArrAss* p) {
+    TypeCode varType = env_.findVar(p->ident_, p->line_number, p->char_number);
+    ETyped* indexExpr = infer(p->expr_1, env_);
+    ETyped* RHSExpr = infer(p->expr_2, env_);
+
+    if (typecode(indexExpr) != TypeCode::INT) { // arr[INTEGER]
+        throw TypeError("Array index has to be an integer", p->line_number,
+                        p->char_number);
+    }
+
+    if (varType != typecode(RHSExpr)) { // type(Arr) == type(RHS)
+        throw TypeError("Expr has type " + toString(RHSExpr) + ", expected " +
+                            toString(varType) + " for array" + p->ident_,
+                        p->line_number, p->char_number);
+    }
+    p->expr_1 = indexExpr;
+    p->expr_2 = RHSExpr;
 }
 
 void StatementChecker::visitRet(Ret* p) {
@@ -205,8 +246,10 @@ void StatementChecker::visitEmpty(Empty* p) {
 void ReturnChecker::visitDecr(Decr* p) {}
 void ReturnChecker::visitIncr(Incr* p) {}
 void ReturnChecker::visitWhile(While* p) {}
+void ReturnChecker::visitFor(For* p) {}
 void ReturnChecker::visitDecl(Decl* p) {}
 void ReturnChecker::visitAss(Ass* p) {}
+void ReturnChecker::visitArrAss(ArrAss* p) {}
 void ReturnChecker::visitVRet(VRet* p) {}
 void ReturnChecker::visitSExp(SExp* p) {}
 void ReturnChecker::visitEmpty(Empty* p) {}
@@ -414,6 +457,31 @@ void TypeInferrer::visitEApp(EApp* p) {
 
     Return(new ETyped(p, newType(retType)));
 }
+void TypeInferrer::visitEArr(EArr* p) { // e.g. arr[5]
+    ETyped* indexExpr = Visit(p->expr_); // Visit index-expr
+    if (typecode(indexExpr) != TypeCode::INT) {
+        throw TypeError("Array index has to be an integer", p->line_number,
+                        p->char_number);
+    }
+
+    p->expr_ = indexExpr;
+
+    TypeCode arrayType = env_.findVar(p->ident_, p->line_number, p->char_number);
+    Return(new ETyped(p, newType(arrayType)));
+}
+void TypeInferrer::visitEArrLen(EArrLen* p) {
+    Return(new ETyped(p, new Int));
+}
+void TypeInferrer::visitEArrNew(EArrNew* p) {
+    ETyped* indexExpr = Visit(p->expr_); // Visit index-expr
+    if (typecode(indexExpr) != TypeCode::INT) {
+        throw TypeError("Array index has to be an integer", p->line_number,
+                        p->char_number);
+    }
+
+    p->expr_ = indexExpr;
+    Return(new ETyped(p, p->type_));
+}
 
 /********************   Env class    ********************/
 
@@ -452,6 +520,12 @@ void Env::addVar(const std::string& name, TypeCode t) {
     if (auto [_, success] = currentScope.insert({name, t}); !success)
         throw TypeError("Duplicate variable '" + name + "' in scope");
 }
+
+void Env::enterFor() {
+    enterScope();
+    enteredFor_ = true;
+}
+void Env::exitFor() { enteredFor_ = false; }
 
 /********************   Helper functions    ********************/
 

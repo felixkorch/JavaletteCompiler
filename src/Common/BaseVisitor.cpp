@@ -270,5 +270,23 @@ void BaseVisitor::visitString(String x) {
 void BaseVisitor::visitIdent(Ident x) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
+void BaseVisitor::visitArrAss(ArrAss* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitFor(For* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitArr(Arr* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitEArr(EArr* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitEArrLen(EArrLen* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitEArrNew(EArrNew* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
 
 } // namespace jlc

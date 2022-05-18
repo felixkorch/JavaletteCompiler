@@ -13,7 +13,7 @@ namespace jlc::typechecker {
 using namespace bnfc;
 
 enum class TypeCode {
-    INT, DOUBLE, BOOLEAN, VOID, STRING, ERROR
+    INT, DOUBLE, BOOLEAN, VOID, STRING, ARRAY, ERROR
 };
 
 enum class OpCode {
@@ -39,17 +39,22 @@ class Env {
     std::list<Scope> scopes_;
     std::unordered_map<std::string, FunctionType> signatures_;
     Signature currentFn_;
+    bool enteredFor_;
 
   public:
     Env()
         : scopes_()
           , signatures_()
-          , currentFn_() {}
+          , currentFn_()
+          , enteredFor_(false) {}
 
     void enterScope();
     void exitScope();
     void enterFn(const std::string& fnName);
     Signature& getCurrentFunction();
+    void enterFor();
+    void exitFor();
+    bool isForBlock() const { return enteredFor_; }
 
     // In the future: could enter scope in constructor to allow global vars
 
@@ -96,6 +101,7 @@ public:
     void visitDoub(Doub *p) override { Return(TypeCode::DOUBLE); }
     void visitBool(Bool *p) override { Return(TypeCode::BOOLEAN); }
     void visitVoid(Void *p) override { Return(TypeCode::VOID); }
+    void visitArr(Arr *p) override { Return(TypeCode::ARRAY); }
     void visitStringLit(StringLit *p) override { Return(TypeCode::STRING); }
     void visitArgument(Argument *p) override { Return(Visit(p->type_)); }
     void visitETyped(ETyped *p) override { Return(Visit(p->type_)); }
@@ -128,6 +134,9 @@ public:
     void visitERel(ERel *p) override;
     void visitEApp(EApp *p) override;
     void visitEString(EString *p) override;
+    void visitEArr(EArr *p) override;
+    void visitEArrLen(EArrLen *p) override;
+    void visitEArrNew(EArrNew *p) override;
 };
 
 // Handles the type-checking for declarations, needed because the "children"
@@ -158,10 +167,12 @@ public:
     void visitCond(Cond *p) override;
     void visitCondElse(CondElse *p) override;
     void visitWhile(While *p) override;
+    void visitFor(For *p) override;
     void visitBlock(Block *p) override;
     void visitDecl(Decl *p) override;
     void visitListStmt(ListStmt *p) override;
     void visitAss(Ass *p) override;
+    void visitArrAss(ArrAss *p) override;
     void visitRet(Ret *p) override;
     void visitVRet(VRet *p) override;
     void visitSExp(SExp *p) override;
@@ -181,10 +192,12 @@ public:
     void visitCond(Cond *p) override;
     void visitCondElse(CondElse *p) override;
     void visitWhile(While *p) override;
+    void visitFor(For *p) override;
     void visitBlock(Block *p) override;
     void visitDecl(Decl *p) override;
     void visitListStmt(ListStmt *p) override;
     void visitAss(Ass *p) override;
+    void visitArrAss(ArrAss *p) override;
     void visitRet(Ret *p) override;
     void visitVRet(VRet *p) override;
     void visitSExp(SExp *p) override;

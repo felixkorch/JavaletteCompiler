@@ -73,6 +73,12 @@ class BaseVisitor : public Visitor {
     void visitListExpr(ListExpr* p);
     void visitETyped(ETyped* p);
     void visitStringLit(StringLit* p);
+    void visitArrAss(ArrAss* p);
+    void visitFor(For* p);
+    void visitArr(Arr* p);
+    void visitEArr(EArr* p);
+    void visitEArrLen(EArrLen* p);
+    void visitEArrNew(EArrNew* p);
 
     void visitInteger(Integer x);
     void visitChar(Char x);

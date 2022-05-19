@@ -135,16 +135,16 @@ public:
     void visitEApp(EApp *p) override;
     void visitEString(EString *p) override;
     void visitEArrLen(EArrLen *p) override;
-    void visitEArrNew(EArrNew *p) override;
+    void visitEDim(EDim *p) override;
 };
 
 // Handles the type-checking for declarations, needed because the "children"
 // i.e. Init/NoInit, needs access to the type variable
 class DeclHandler : public VoidVisitor {
     Env& env_;
-    Type* t; // Holds the type of the declaration
+    Type* LHSType; // Holds the type of the declaration
 public:
-    explicit DeclHandler(Env& env): env_(env), t(nullptr) {}
+    explicit DeclHandler(Env& env): env_(env), LHSType(nullptr) {}
 
     void visitDecl(Decl *p) override;
     void visitListItem(ListItem *p) override;
@@ -171,7 +171,6 @@ public:
     void visitDecl(Decl *p) override;
     void visitListStmt(ListStmt *p) override;
     void visitAss(Ass *p) override;
-    void visitArrAss(ArrAss *p) override;
     void visitRet(Ret *p) override;
     void visitVRet(VRet *p) override;
     void visitSExp(SExp *p) override;
@@ -196,7 +195,6 @@ public:
     void visitDecl(Decl *p) override;
     void visitListStmt(ListStmt *p) override;
     void visitAss(Ass *p) override;
-    void visitArrAss(ArrAss *p) override;
     void visitRet(Ret *p) override;
     void visitVRet(VRet *p) override;
     void visitSExp(SExp *p) override;

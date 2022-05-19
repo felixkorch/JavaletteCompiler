@@ -30,9 +30,7 @@ Init.      Item ::= Ident "=" Expr ;
 
 separator nonempty Item "," ;
 
-Ass.       Stmt ::= Ident "=" Expr  ";" ;
-
-ArrAss.    Stmt ::= Expr6 "=" Expr ";" ;
+Ass.       Stmt ::= Expr "=" Expr  ";" ;
 
 Incr.      Stmt ::= Ident "++"  ";" ;
 
@@ -75,19 +73,17 @@ separator nonempty Dim "";
 
 -- Expressions ---------------------------------------------
 
-EDimension. EDim ::= "[" Expr3 "]" ;
+-- Note: Lifted EArrNew, EVar, EApp to Expr7 (highest precedence) so that we only can index those.
+-- See EDim. below
+-- TODO: Might change EVar to Expr8 so that we only can assign to that
 
-EArrNew.    Expr6 ::= "new" Type [EDim] ;
+EArrNew.    Expr7 ::= "new" Type ;
 
-EIndex.     Expr6 ::= Expr6 "[" Expr3 "]" ;
-
---EIndex.     Expr6 ::= Expr6 [EDim] ;
-
---EArrNew.    Expr6 ::= "new" Type ;
+EDim.       Expr7 ::= Expr7 "[" Expr3 "]" ;
 
 EArrLen.    Expr6 ::= Expr6 "." Ident ;
 
-EVar.       Expr6 ::= Ident ;
+EVar.       Expr7 ::= Ident ;
 
 ELitInt.    Expr6 ::= Integer ;
 
@@ -97,7 +93,7 @@ ELitTrue.   Expr6 ::= "true" ;
 
 ELitFalse.  Expr6 ::= "false" ;
 
-EApp.       Expr6 ::= Ident "(" [Expr] ")" ;
+EApp.       Expr7 ::= Ident "(" [Expr] ")" ;
 
 EString.    Expr6 ::= String ;
 
@@ -117,10 +113,10 @@ EOr.        Expr ::= Expr1 "||" Expr ;
 
 internal ETyped. Expr ::= "[" Expr ":" Type "]" ;
 
-coercions  Expr 6 ;
+coercions  Expr 7 ;
 
 separator  Expr "," ;
-separator  EDim "" ;
+--separator  EDim "" ;
 
 -- operators -----------------------------------------------
 

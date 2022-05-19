@@ -29,7 +29,6 @@ class BaseVisitor : public Visitor {
     void visitNoInit(NoInit *p);
     void visitInit(Init *p);
     void visitAss(Ass *p);
-    void visitArrAss(ArrAss *p);
     void visitIncr(Incr *p);
     void visitDecr(Decr *p);
     void visitRet(Ret *p);
@@ -47,7 +46,6 @@ class BaseVisitor : public Visitor {
     void visitArr(Arr *p);
     void visitStringLit(StringLit *p);
     void visitFun(Fun *p);
-    void visitEDimension(EDimension *p);
     void visitEVar(EVar *p);
     void visitEArrLen(EArrLen *p);
     void visitEArrNew(EArrNew *p);
@@ -83,7 +81,6 @@ class BaseVisitor : public Visitor {
     void visitListType(ListType *p);
     void visitListDim(ListDim *p);
     void visitListExpr(ListExpr *p);
-    void visitListEDim(ListEDim *p);
 
     void visitInteger(Integer x);
     void visitChar(Char x);

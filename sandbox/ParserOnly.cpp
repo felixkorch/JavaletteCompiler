@@ -1,5 +1,6 @@
 #include "src/Common/Util.h"
 #include "src/Frontend/Parser.h"
+#include "bnfc/Printer.H"
 #include <iostream>
 
 using namespace jlc;

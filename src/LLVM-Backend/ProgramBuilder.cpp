@@ -55,8 +55,7 @@ class FunctionAdder : public VoidVisitor {
 
 /************  Intermediate Builder   ************/
 
-ProgramBuilder::ProgramBuilder(Codegen& parent)
-    : parent_(parent), isLastStmt_(false) {}
+ProgramBuilder::ProgramBuilder(Codegen& parent) : parent_(parent), isLastStmt_(false) {}
 
 void ProgramBuilder::visitProgram(Program* p) {
     // Create the functions before building each
@@ -139,11 +138,14 @@ void ProgramBuilder::visitVRet(VRet* p) {
     parent_.builder_->CreateUnreachable();
 }
 
+// TODO: Might be broken, did not test the change yet
 void ProgramBuilder::visitAss(Ass* p) {
     ExpBuilder expBuilder(parent_);
-    llvm::Value* exp = expBuilder.Visit(p->expr_);          // Build expr
-    llvm::Value* varPtr = parent_.env_->findVar(p->ident_); // Get ptr to var
-    parent_.builder_->CreateStore(exp, varPtr);             // *ptr <- expr
+    llvm::Value* LHSExp = expBuilder.Visit(p->expr_1); // Build LHS
+    llvm::Value* RHSExp = expBuilder.Visit(p->expr_2); // Build RHS
+    EVar* eVar = dynamic_cast<EVar*>(p->expr_1);
+    llvm::Value* varPtr = parent_.env_->findVar(eVar->ident_); // Get ptr to var
+    parent_.builder_->CreateStore(RHSExp, varPtr);             // *ptr <- expr
 }
 
 void ProgramBuilder::visitCond(Cond* p) {

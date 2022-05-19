@@ -1,12 +1,12 @@
 #include "src/Common/Util.h"
-#include "src/LLVM-Backend/CodeGen.h"
+//#include "src/LLVM-Backend/CodeGen.h"
 #include "src/Frontend/Parser.h"
 #include "src/Frontend/TypeChecker.h"
 #include <iostream>
 
 using namespace jlc;
 using namespace jlc::typechecker;
-using namespace jlc::codegen;
+//using namespace jlc::codegen;
 namespace fs = std::filesystem;
 
 int main(int argc, char** argv) {

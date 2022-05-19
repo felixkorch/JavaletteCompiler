@@ -270,9 +270,6 @@ void BaseVisitor::visitString(String x) {
 void BaseVisitor::visitIdent(Ident x) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
-void BaseVisitor::visitArrAss(ArrAss* p) {
-    JLC_ASSERT(false, "Visitor function not implemented!");
-}
 void BaseVisitor::visitFor(For* p) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
@@ -285,17 +282,11 @@ void BaseVisitor::visitEArrLen(EArrLen* p) {
 void BaseVisitor::visitEArrNew(EArrNew* p) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
-void BaseVisitor::visitEDimension(EDimension* p) {
-    JLC_ASSERT(false, "Visitor function not implemented!");
-}
 
 void BaseVisitor::visitDimension(Dimension* p) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
 void BaseVisitor::visitListDim(ListDim* p) {
-    JLC_ASSERT(false, "Visitor function not implemented!");
-}
-void BaseVisitor::visitListEDim(ListEDim* p) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
 void BaseVisitor::visitDim(Dim* p) {

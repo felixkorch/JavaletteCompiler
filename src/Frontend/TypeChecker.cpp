@@ -174,58 +174,25 @@ void StatementChecker::visitDecl(Decl* p) {
 }
 
 void StatementChecker::visitAss(Ass* p) {
-    Type* varType = env_.findVar(p->ident_, p->line_number, p->char_number);
-    ETyped* RHSExpr = infer(p->expr_, env_);
 
-    // Only for array-variables!
+    ETyped* LHSExpr = infer(p->expr_1, env_);
+    ETyped* RHSExpr = infer(p->expr_2, env_);
+
+    // Only for array-variables (LHS)!
     if (Arr* rhs = dynamic_cast<Arr*>(RHSExpr->type_)) {
-        if (Arr* lhs = dynamic_cast<Arr*>(varType)) {
-            if (lhs->listdim_->size() != rhs->listdim_->size()) {
-                throw TypeError("Mismatch of size when assigning new array",
-                                p->line_number, p->char_number);
-            }
-        } else {
+        if (!dynamic_cast<Arr*>(LHSExpr->type_)) {
             throw TypeError("Trying to assign a new array to non-array variable",
                             p->line_number, p->char_number);
         }
     }
 
-    if (typecode(varType) != typecode(RHSExpr)) {
-        throw TypeError("Expr has type " + toString(RHSExpr) + ", expected " +
-                            toString(typecode(varType)) + " for variable " + p->ident_,
+    if (typecode(LHSExpr->type_) != typecode(RHSExpr->type_)) {
+        throw TypeError("expected type is " + toString(typecode(LHSExpr->type_)) +
+                            ", but got " + toString(typecode(RHSExpr->type_)),
                         p->line_number, p->char_number);
     }
-    p->expr_ = RHSExpr;
-}
-
-void StatementChecker::visitArrAss(ArrAss* p) {
-    Type* varType = env_.findVar(p->ident_, p->line_number, p->char_number);
-    Arr* arr = dynamic_cast<Arr*>(varType);
-
-    if (arr->listdim_->size() != p->listedim_->size()) { // Check dimensions matching
-        throw TypeError("Array assignment with wrong number of dimensions",
-                        p->line_number, p->char_number);
-    }
-
-    for (EDim* edim : *p->listedim_) {
-        EDimension* eDimension = (EDimension*)edim; // Hack-cast to derived type
-        ETyped* indexExpr = infer(eDimension->expr_, env_);
-
-        if (typecode(indexExpr) != TypeCode::INT) { // Check indexing only with ints
-            throw TypeError("Array index has to be an integer", p->line_number,
-                            p->char_number);
-        }
-        eDimension->expr_ = indexExpr;
-    }
-
-    ETyped* RHSExpr = infer(p->expr_, env_);
-
-    if (typecode(arr->type_) != typecode(RHSExpr)) { // Check type(Arr) == type(RHS)
-        throw TypeError("Expr has type " + toString(RHSExpr) + ", expected " +
-                            toString(typecode(varType)) + " for array " + p->ident_,
-                        p->line_number, p->char_number);
-    }
-    p->expr_ = RHSExpr;
+    p->expr_1 = LHSExpr;
+    p->expr_2 = RHSExpr;
 }
 
 void StatementChecker::visitRet(Ret* p) {
@@ -278,7 +245,6 @@ void ReturnChecker::visitWhile(While* p) {}
 void ReturnChecker::visitFor(For* p) {}
 void ReturnChecker::visitDecl(Decl* p) {}
 void ReturnChecker::visitAss(Ass* p) {}
-void ReturnChecker::visitArrAss(ArrAss* p) {}
 void ReturnChecker::visitVRet(VRet* p) {}
 void ReturnChecker::visitSExp(SExp* p) {}
 void ReturnChecker::visitEmpty(Empty* p) {}
@@ -304,7 +270,7 @@ void ReturnChecker::visitCondElse(CondElse* p) {
 /********************   DeclHandler class    ********************/
 
 void DeclHandler::visitDecl(Decl* p) {
-    t = p->type_;
+    LHSType = p->type_;
     Visit(p->listitem_);
 }
 
@@ -314,12 +280,12 @@ void DeclHandler::visitListItem(ListItem* p) {
 }
 
 void DeclHandler::visitInit(Init* p) {
-    env_.addVar(p->ident_, t);
-    ETyped* exprTyped = infer(p->expr_, env_);
+    env_.addVar(p->ident_, LHSType);
+    ETyped* RHSExpr = infer(p->expr_, env_);
 
     // Only for array-variables!
-    if (Arr* rhs = dynamic_cast<Arr*>(exprTyped->type_)) {
-        if (Arr* lhs = dynamic_cast<Arr*>(t)) {
+    if (Arr* rhs = dynamic_cast<Arr*>(RHSExpr->type_)) {
+        if (Arr* lhs = dynamic_cast<Arr*>(LHSType)) {
             if (lhs->listdim_->size() != rhs->listdim_->size()) {
                 throw TypeError("Mismatch of size when assigning new array",
                                 p->line_number, p->char_number);
@@ -330,15 +296,15 @@ void DeclHandler::visitInit(Init* p) {
         }
     }
 
-    if (typecode(t) != typecode(exprTyped)) {
-        throw TypeError("expected type is " + toString(typecode(t)) + ", but got " +
-                            toString(exprTyped),
+    if (typecode(LHSType) != typecode(RHSExpr)) {
+        throw TypeError("expected type is " + toString(typecode(LHSType)) + ", but got " +
+                            toString(RHSExpr),
                         p->expr_->line_number, p->expr_->char_number);
     }
-    p->expr_ = exprTyped;
+    p->expr_ = RHSExpr;
 }
 
-void DeclHandler::visitNoInit(NoInit* p) { env_.addVar(p->ident_, t); }
+void DeclHandler::visitNoInit(NoInit* p) { env_.addVar(p->ident_, LHSType); }
 
 /********************   TypeInferrer class    ********************/
 
@@ -386,24 +352,9 @@ void TypeInferrer::visitELitFalse(ELitFalse* p) { Return(new ETyped(p, new Bool)
 void TypeInferrer::visitELitTrue(ELitTrue* p) { Return(new ETyped(p, new Bool)); }
 void TypeInferrer::visitEString(EString* p) { Return(new ETyped(p, new StringLit)); }
 
-// Normal variables + array indexing
+// Variables
 void TypeInferrer::visitEVar(EVar* p) {
     Type* varType = env_.findVar(p->ident_, p->line_number, p->char_number);
-
-    // Only for array indexing!
-    // Non-empty dimension-vector means array expression.
-    if (!p->listedim_->empty()) {
-        for (auto edim : *p->listedim_) {
-            EDimension* eDimension = (EDimension*)edim;
-            ETyped* indexExpr = Visit(eDimension->expr_); // Visit index-expr
-            if (typecode(indexExpr) != TypeCode::INT) {
-                throw TypeError("Array index has to be an integer", p->line_number,
-                                p->char_number);
-            }
-            eDimension->expr_ = indexExpr;
-        }
-        varType = dynamic_cast<Arr*>(varType)->type_; // Return the base-type of array
-    }
     Return(new ETyped(p, varType));
 }
 
@@ -518,6 +469,10 @@ void TypeInferrer::visitEApp(EApp* p) {
 }
 
 void TypeInferrer::visitEArrLen(EArrLen* p) {
+    if (p->ident_.compare("length") != 0) {
+        throw TypeError("Method not recognized, did you mean 'length'?", p->line_number,
+                        p->char_number);
+    }
     ETyped* expr = Visit(p->expr_);
     if (!dynamic_cast<Arr*>(expr->type_)) {
         throw TypeError("Can only check length of array type", p->line_number,
@@ -527,23 +482,54 @@ void TypeInferrer::visitEArrLen(EArrLen* p) {
     Return(new ETyped(p, new Int));
 }
 
-void TypeInferrer::visitEArrNew(EArrNew* p) {
+ListDim* newArrayWithNDimensions(int N) {
     ListDim* listDim = new ListDim;
-    listDim->reserve(p->listedim_->size());
+    for (int i = 0; i < N; i++)
+        listDim->push_back(new Dimension);
+    return listDim;
+}
 
-    for (auto edim : *p->listedim_) {
-        EDimension* eDimension = (EDimension*)edim;
-        ETyped* indexExpr = Visit(eDimension->expr_); // Visit index-expr
-        if (typecode(indexExpr) != TypeCode::INT) {   // Check index is an integer
+// TODO: Might have to set type of base expr too.
+void TypeInferrer::visitEDim(EDim* p) {
+    int dimOfExp = 0; // Nr of dimOfExp that is used for indexing
+    Expr* current = p;
+    while (EDim* eDim = dynamic_cast<EDim*>(current)) {
+        dimOfExp++;
+        ETyped* indexExpr = infer(eDim->expr_2, env_);
+        if (typecode(indexExpr) != TypeCode::INT) { // Check indexing only with ints
             throw TypeError("Array index has to be an integer", p->line_number,
                             p->char_number);
         }
-
-        eDimension->expr_ = indexExpr;
-        listDim->push_back(new Dimension);
+        eDim->expr_2 = indexExpr;
+        current = eDim->expr_1;
     }
-
-    Return(new ETyped(p, new Arr(p->type_, listDim)));
+    if (auto arr = dynamic_cast<EArrNew*>(current)) { // e.g. new int[4]
+        Return(new ETyped(p, new Arr(arr->type_, newArrayWithNDimensions(dimOfExp))));
+    } else if (auto eVar = dynamic_cast<EVar*>(current)) { // e.g. arr[2][3]
+        Type* varT = env_.findVar(eVar->ident_, p->line_number, p->char_number);
+        Arr* array = dynamic_cast<Arr*>(varT);
+        if (!array) {
+            throw TypeError("Trying to index a variable that is not of type 'array'",
+                            p->line_number, p->char_number);
+        }
+        int dimOfArray = array->listdim_->size();
+        if (dimOfArray == dimOfExp) { // Inner-most dimension, i.e type of items.
+            Return(new ETyped(p, array->type_));
+        } else { // Dim(arr) - Dim(Expr) = Dimension of expr
+            Return(new ETyped(
+                p, new Arr(array->type_, newArrayWithNDimensions(dimOfArray - dimOfExp))));
+        }
+    } else if (auto eApp = dynamic_cast<EApp*>(current)) { // e.g. getArr()[2]
+        auto fnT = env_.findFn(eApp->ident_, p->line_number, p->char_number);
+        Arr* arrT = dynamic_cast<Arr*>(fnT.ret);
+        if (!arrT) {
+            throw TypeError("Trying to index a variable that is not of type 'array'",
+                            p->line_number, p->char_number);
+        }
+        Return(new ETyped(p, arrT->type_));
+    } else {
+        throw TypeError("Cannot index this type", p->line_number, p->char_number);
+    }
 }
 
 /********************   Env class    ********************/

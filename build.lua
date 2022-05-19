@@ -45,7 +45,7 @@ local function parse_args(args)
         os.execute("mkdir -p install && cp -rf doc lib src install/ && cp Makefile install/ && cp bnfc/Javalette.tex install/doc/")
         os.execute("cd install && tar -czf " .. install_name .. " doc lib src Makefile")
     elseif command == "test" then
-        os.execute("cd tester && python3 testing.py ../install/" .. install_name .. " -x arrays1")
+        os.execute("cd tester && python3 testing.py ../install/" .. install_name .. " -x arrays1 arrays2")
     elseif command == "clean" then
         os.execute("rm -rf bnfc install > /dev/null")
     end

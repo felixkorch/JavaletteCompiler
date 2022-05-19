@@ -13,7 +13,7 @@ namespace jlc::typechecker {
 using namespace bnfc;
 
 enum class TypeCode {
-    INT, DOUBLE, BOOLEAN, VOID, STRING, ARRAY, ERROR
+    INT, DOUBLE, BOOLEAN, VOID, STRING, ERROR
 };
 
 enum class OpCode {
@@ -24,8 +24,8 @@ enum class OpCode {
 };
 
 struct FunctionType {
-    std::list<TypeCode> args;
-    TypeCode ret;
+    std::list<Type*> args;
+    Type* ret;
 };
 
 struct Signature {
@@ -34,7 +34,7 @@ struct Signature {
 };
 
 class Env {
-    using Scope = std::unordered_map<std::string, TypeCode>; // Map of (Var -> Type)
+    using Scope = std::unordered_map<std::string, Type*>; // Map of (Var -> Type)
     // Defines the environment of the program
     std::list<Scope> scopes_;
     std::unordered_map<std::string, FunctionType> signatures_;
@@ -62,11 +62,11 @@ class Env {
     void addSignature(const std::string& fnName, const FunctionType& t);
 
     // Called when it's used in an expression, throws if the variable doesn't exist.
-    TypeCode findVar(const std::string& var, int lineNr, int charNr);
+    Type* findVar(const std::string& var, int lineNr, int charNr);
     // Called when a function call is invoked, throws if the function doesn't exist.
     FunctionType& findFn(const std::string& fn, int lineNr, int charNr);
     // Adds a variable to the current scope, throws if it already exists.
-    void addVar(const std::string& name, TypeCode t);
+    void addVar(const std::string& name, Type* t);
 
 };
 
@@ -101,10 +101,10 @@ public:
     void visitDoub(Doub *p) override { Return(TypeCode::DOUBLE); }
     void visitBool(Bool *p) override { Return(TypeCode::BOOLEAN); }
     void visitVoid(Void *p) override { Return(TypeCode::VOID); }
-    void visitArr(Arr *p) override { Return(TypeCode::ARRAY); }
     void visitStringLit(StringLit *p) override { Return(TypeCode::STRING); }
     void visitArgument(Argument *p) override { Return(Visit(p->type_)); }
     void visitETyped(ETyped *p) override { Return(Visit(p->type_)); }
+    void visitArr(Arr *p) override { Visit(p->type_); }
 };
 
 // Returns an annotated version of the expression and
@@ -134,7 +134,6 @@ public:
     void visitERel(ERel *p) override;
     void visitEApp(EApp *p) override;
     void visitEString(EString *p) override;
-    void visitEArr(EArr *p) override;
     void visitEArrLen(EArrLen *p) override;
     void visitEArrNew(EArrNew *p) override;
 };
@@ -143,9 +142,9 @@ public:
 // i.e. Init/NoInit, needs access to the type variable
 class DeclHandler : public VoidVisitor {
     Env& env_;
-    TypeCode t; // Holds the type of the declaration
+    Type* t; // Holds the type of the declaration
 public:
-    explicit DeclHandler(Env& env): env_(env), t(TypeCode::ERROR) {}
+    explicit DeclHandler(Env& env): env_(env), t(nullptr) {}
 
     void visitDecl(Decl *p) override;
     void visitListItem(ListItem *p) override;

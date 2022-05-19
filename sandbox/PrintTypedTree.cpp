@@ -1,49 +1,49 @@
-#include "bnfc/ParserError.H"
-#include "bnfc/Parser.H"
-#include "src/Frontend/TypeChecker.h"
-#include "src/Frontend/TypeError.h"
+#include "src/Common/Util.h"
+#include "src/Frontend/Parser.h"
+#include <iostream>
 
-int main(int argc, char ** argv)
-{
-    FILE *input;
-    char *filename = nullptr;
+using namespace jlc;
+using namespace jlc::typechecker;
+namespace fs = std::filesystem;
 
-    filename = argv[1];
+int main(int argc, char** argv) {
+    FILE* input = nullptr;
 
-    if (filename) {
-        input = fopen(filename, "r");
-        if (!input) {
-            exit(1);
-        }
-    } else input = stdin;
-
-    bnfc::Prog *parse_tree = nullptr;
     try {
-        parse_tree = bnfc::pProg(input);
-    } catch( bnfc::parse_error &e) {
-        std::cerr << "ERROR: Parse error on line " << e.getLine() << "\n";
+        input = readFileOrInput(argv[1]);
+    } catch (std::exception& e) {
+        std::cerr << "ERROR: Failed to read source file" << std::endl;
     }
-    
+    Parser parser;
+
+    try {
+        parser.run(input);
+    } catch (bnfc::parse_error& e) {
+        std::cerr << "ERROR: Parse error on line " << e.getLine() << std::endl;
+        return 1;
+    } catch (std::exception& e) {
+        return 1;
+    }
+
     auto printer = std::make_unique<bnfc::PrintAbsyn>();
 
-    if (parse_tree) {
-        try {
-            // Print program before typechecking
-            std::cout << printer->print(parse_tree) << std::endl;
-            auto annotated_tree = jlc::typechecker::run(parse_tree);
-            // Print program after typechecking
-            std::cout << printer->print(annotated_tree) << std::endl;
-            
-        }catch(jlc::typechecker::TypeError &e) {
-            std::cerr << e.what() << "\n";
-            return 1;
-        }catch(std::exception &e) {
-            std::cerr << e.what() << "\n";
-            return 1;
-        }
-        std::cerr << "OK" << std::endl;
-        delete parse_tree;
-        return 0;
+    try {
+        // Print program before typechecking
+        std::cout << printer->print(parser.getAST()) << std::endl;
+
+        TypeChecker typeChecker;
+        typeChecker.run(parser.getAST());
+
+        // Print program after typechecking
+        std::cout << printer->print(typeChecker.getAbsyn()) << std::endl;
+
+    } catch (jlc::typechecker::TypeError& e) {
+        std::cerr << e.what() << "\n";
+        return 1;
+    } catch (std::exception& e) {
+        std::cerr << e.what() << "\n";
+        return 1;
     }
-    return 1;
+    std::cerr << "OK" << std::endl;
+    return 0;
 }

@@ -32,7 +32,7 @@ separator nonempty Item "," ;
 
 Ass.       Stmt ::= Ident "=" Expr  ";" ;
 
-ArrAss.    Stmt ::= Ident "[" Expr "]" "=" Expr ";" ;
+ArrAss.    Stmt ::= Expr6 "=" Expr ";" ;
 
 Incr.      Stmt ::= Ident "++"  ";" ;
 
@@ -54,6 +54,8 @@ SExp.      Stmt ::= Expr  ";" ;
 
 -- Types ---------------------------------------------------
 
+Dimension.  Dim ::= "[]" ;
+
 Int.       Type ::= "int" ;
 
 Doub.      Type ::= "double" ;
@@ -62,55 +64,63 @@ Bool.      Type ::= "boolean" ;
 
 Void.      Type ::= "void" ;
 
-Arr.       Type ::= Type "[]" ;
+Arr.       Type ::= Type [Dim] ;
 
 internal StringLit. Type ::= "string" ;
 
 internal   Fun. Type ::= Type "(" [Type] ")" ;
 
 separator  Type "," ;
+separator nonempty Dim "";
 
 -- Expressions ---------------------------------------------
 
-EVar.      Expr6 ::= Ident ;
+EDimension. EDim ::= "[" Expr3 "]" ;
 
-ELitInt.   Expr6 ::= Integer ;
+EArrNew.    Expr6 ::= "new" Type [EDim] ;
 
-ELitDoub.  Expr6 ::= Double;
+EIndex.     Expr6 ::= Expr6 "[" Expr3 "]" ;
 
-ELitTrue.  Expr6 ::= "true" ;
+--EIndex.     Expr6 ::= Expr6 [EDim] ;
 
-ELitFalse. Expr6 ::= "false" ;
+--EArrNew.    Expr6 ::= "new" Type ;
 
-EArr.      Expr6 ::= Ident "[" Expr "]" ;
+EArrLen.    Expr6 ::= Expr6 "." Ident ;
 
-EArrLen.   Expr6 ::= Ident "." "length" ;
+EVar.       Expr6 ::= Ident ;
 
-EArrNew.   Expr6 ::= "new" Type "[" Expr "]" ;
+ELitInt.    Expr6 ::= Integer ;
 
-EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
+ELitDoub.   Expr6 ::= Double;
 
-EString.   Expr6 ::= String ;
+ELitTrue.   Expr6 ::= "true" ;
 
-Neg.       Expr5 ::= "-" Expr6 ;
+ELitFalse.  Expr6 ::= "false" ;
 
-Not.       Expr5 ::= "!" Expr6 ;
+EApp.       Expr6 ::= Ident "(" [Expr] ")" ;
 
-EMul.      Expr4 ::= Expr4 MulOp Expr5 ;
+EString.    Expr6 ::= String ;
 
-EAdd.      Expr3 ::= Expr3 AddOp Expr4 ;
+Neg.        Expr5 ::= "-" Expr6 ;
 
-ERel.      Expr2 ::= Expr2 RelOp Expr3 ;
+Not.        Expr5 ::= "!" Expr6 ;
 
-EAnd.      Expr1 ::= Expr2 "&&" Expr1 ;
+EMul.       Expr4 ::= Expr4 MulOp Expr5 ;
 
-EOr.       Expr ::= Expr1 "||" Expr ;
+EAdd.       Expr3 ::= Expr3 AddOp Expr4 ;
+
+ERel.       Expr2 ::= Expr2 RelOp Expr3 ;
+
+EAnd.       Expr1 ::= Expr2 "&&" Expr1 ;
+
+EOr.        Expr ::= Expr1 "||" Expr ;
 
 internal ETyped. Expr ::= "[" Expr ":" Type "]" ;
 
 coercions  Expr 6 ;
 
 separator  Expr "," ;
+separator  EDim "" ;
 
 -- operators -----------------------------------------------
 

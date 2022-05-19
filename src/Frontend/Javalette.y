@@ -64,10 +64,14 @@ extern yyscan_t bnfc_initialize_lexer(FILE * inp);
   bnfc::Stmt* stmt_;
   bnfc::Item* item_;
   bnfc::ListItem* listitem_;
+  bnfc::Dim* dim_;
   bnfc::Type* type_;
   bnfc::ListType* listtype_;
+  bnfc::ListDim* listdim_;
+  bnfc::EDim* edim_;
   bnfc::Expr* expr_;
   bnfc::ListExpr* listexpr_;
+  bnfc::ListEDim* listedim_;
   bnfc::AddOp* addop_;
   bnfc::MulOp* mulop_;
   bnfc::RelOp* relop_;
@@ -118,7 +122,6 @@ extern int yylex(YYSTYPE *lvalp, YYLTYPE *llocp, yyscan_t scanner);
 %token          _KW_for      /* for */
 %token          _KW_if       /* if */
 %token          _KW_int      /* int */
-%token          _KW_length   /* length */
 %token          _KW_new      /* new */
 %token          _KW_return   /* return */
 %token          _KW_true     /* true */
@@ -142,8 +145,11 @@ extern int yylex(YYSTYPE *lvalp, YYLTYPE *llocp, yyscan_t scanner);
 %type <stmt_> Stmt
 %type <item_> Item
 %type <listitem_> ListItem
+%type <dim_> Dim
 %type <type_> Type
 %type <listtype_> ListType
+%type <listdim_> ListDim
+%type <edim_> EDim
 %type <expr_> Expr6
 %type <expr_> Expr5
 %type <expr_> Expr4
@@ -152,6 +158,7 @@ extern int yylex(YYSTYPE *lvalp, YYLTYPE *llocp, yyscan_t scanner);
 %type <expr_> Expr1
 %type <expr_> Expr
 %type <listexpr_> ListExpr
+%type <listedim_> ListEDim
 %type <addop_> AddOp
 %type <mulop_> MulOp
 %type <relop_> RelOp
@@ -182,7 +189,7 @@ Stmt : _SEMI { $$ = new bnfc::Empty(); $$->line_number = @$.first_line; $$->char
   | Blk { $$ = new bnfc::BStmt($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | Type ListItem _SEMI { std::reverse($2->begin(),$2->end()) ;$$ = new bnfc::Decl($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ _EQ Expr _SEMI { $$ = new bnfc::Ass($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-  | _IDENT_ _LBRACK Expr _RBRACK _EQ Expr _SEMI { $$ = new bnfc::ArrAss($1, $3, $6); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | Expr6 _EQ Expr _SEMI { $$ = new bnfc::ArrAss($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ _DPLUS _SEMI { $$ = new bnfc::Incr($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ _DMINUS _SEMI { $$ = new bnfc::Decr($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_return Expr _SEMI { $$ = new bnfc::Ret($2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
@@ -199,24 +206,31 @@ Item : _IDENT_ { $$ = new bnfc::NoInit($1); $$->line_number = @$.first_line; $$-
 ListItem : Item { $$ = new bnfc::ListItem(); $$->push_back($1); }
   | Item _COMMA ListItem { $3->push_back($1); $$ = $3; }
 ;
+Dim : _EMPTYBRACK { $$ = new bnfc::Dimension(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+;
 Type : _KW_int { $$ = new bnfc::Int(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_double { $$ = new bnfc::Doub(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_boolean { $$ = new bnfc::Bool(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_void { $$ = new bnfc::Void(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-  | Type _EMPTYBRACK { $$ = new bnfc::Arr($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | Type ListDim { std::reverse($2->begin(),$2->end()) ;$$ = new bnfc::Arr($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
 ;
 ListType : /* empty */ { $$ = new bnfc::ListType(); }
   | Type { $$ = new bnfc::ListType(); $$->push_back($1); }
   | Type _COMMA ListType { $3->push_back($1); $$ = $3; }
 ;
-Expr6 : _IDENT_ { $$ = new bnfc::EVar($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+ListDim : Dim { $$ = new bnfc::ListDim(); $$->push_back($1); }
+  | Dim ListDim { $2->push_back($1); $$ = $2; }
+;
+EDim : _LBRACK Expr3 _RBRACK { $$ = new bnfc::EDimension($2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+;
+Expr6 : _KW_new Type ListEDim { $$ = new bnfc::EArrNew($2, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | Expr6 _LBRACK Expr3 _RBRACK { $$ = new bnfc::EIndex($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | Expr6 _DOT _IDENT_ { $$ = new bnfc::EArrLen($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | _IDENT_ { $$ = new bnfc::EVar($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _INTEGER_ { $$ = new bnfc::ELitInt($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _DOUBLE_ { $$ = new bnfc::ELitDoub($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_true { $$ = new bnfc::ELitTrue(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_false { $$ = new bnfc::ELitFalse(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-  | _IDENT_ _LBRACK Expr _RBRACK { $$ = new bnfc::EArr($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-  | _IDENT_ _DOT _KW_length { $$ = new bnfc::EArrLen($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-  | _KW_new Type _LBRACK Expr _RBRACK { $$ = new bnfc::EArrNew($2, $4); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ _LPAREN ListExpr _RPAREN { std::reverse($3->begin(),$3->end()) ;$$ = new bnfc::EApp($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _STRING_ { $$ = new bnfc::EString($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _LPAREN Expr _RPAREN { $$ = $2; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
@@ -243,6 +257,9 @@ Expr : Expr1 _DBAR Expr { $$ = new bnfc::EOr($1, $3); $$->line_number = @$.first
 ListExpr : /* empty */ { $$ = new bnfc::ListExpr(); }
   | Expr { $$ = new bnfc::ListExpr(); $$->push_back($1); }
   | Expr _COMMA ListExpr { $3->push_back($1); $$ = $3; }
+;
+ListEDim : /* empty */ { $$ = new bnfc::ListEDim(); }
+  | ListEDim EDim { $1->push_back($2); $$ = $1; }
 ;
 AddOp : _PLUS { $$ = new bnfc::Plus(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _MINUS { $$ = new bnfc::Minus(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }

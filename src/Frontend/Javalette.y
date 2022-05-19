@@ -151,6 +151,7 @@ extern int yylex(YYSTYPE *lvalp, YYLTYPE *llocp, yyscan_t scanner);
 %type <listdim_> ListDim
 %type <expdim_> ExpDim
 %type <expr_> Expr7
+%type <expr_> Expr8
 %type <expr_> Expr6
 %type <expr_> Expr5
 %type <expr_> Expr4
@@ -227,9 +228,11 @@ ExpDim : _LBRACK Expr3 _RBRACK { $$ = new bnfc::ExpDimen($2); $$->line_number = 
   | Dim { $$ = new bnfc::ExpDimenEmpty($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
 ;
 Expr7 : _KW_new Type1 { $$ = new bnfc::EArrNew($2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-  | Expr7 ExpDim { $$ = new bnfc::EDim($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-  | _IDENT_ { $$ = new bnfc::EVar($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ _LPAREN ListExpr _RPAREN { std::reverse($3->begin(),$3->end()) ;$$ = new bnfc::EApp($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | Expr8 { $$ = $1; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+;
+Expr8 : Expr7 ExpDim { $$ = new bnfc::EDim($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | _IDENT_ { $$ = new bnfc::EVar($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _LPAREN Expr _RPAREN { $$ = $2; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
 ;
 Expr6 : Expr6 _DOT _IDENT_ { $$ = new bnfc::EArrLen($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }

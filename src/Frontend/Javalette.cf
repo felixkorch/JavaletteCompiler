@@ -76,18 +76,19 @@ separator nonempty Dim "";
 
 -- Note: Lifted EArrNew, EVar, EApp to Expr7 (highest precedence) so that we only can index those.
 -- See EDim. below
--- TODO: Might change EVar to Expr8 so that we only can assign to that
+-- Note: Changed EDim + EVar to 8 so that we can only assign to those.
+-- TODO: Might restrict even more so we can't type new int[2] = 2;
 
 ExpDimen.       ExpDim ::= "[" Expr3 "]" ;
 ExpDimenEmpty.  ExpDim ::= Dim ;
 
 EArrNew.    Expr7 ::= "new" Type1 ;
 
-EDim.       Expr7 ::= Expr7 ExpDim ;
+EDim.       Expr8 ::= Expr7 ExpDim ;
 
 EArrLen.    Expr6 ::= Expr6 "." Ident ;
 
-EVar.       Expr7 ::= Ident ;
+EVar.       Expr8 ::= Ident ;
 
 ELitInt.    Expr6 ::= Integer ;
 
@@ -117,7 +118,7 @@ EOr.        Expr ::= Expr1 "||" Expr ;
 
 internal ETyped. Expr ::= "[" Expr ":" Type "]" ;
 
-coercions  Expr 7 ;
+coercions  Expr 8 ;
 
 separator  Expr "," ;
 --separator  EDim "" ;

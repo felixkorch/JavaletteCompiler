@@ -489,19 +489,27 @@ ListDim* newArrayWithNDimensions(int N) {
     return listDim;
 }
 
-// TODO: Might have to set type of base expr too.
+// TODO: Might have to infer type of base expr too.
+// "EDim" Base can be:
+//
+//  arr[2][3]    EVar
+//  new int[4]   EArrNew
+//  getArr()[2]  EApp
+
 void TypeInferrer::visitEDim(EDim* p) {
     int dimOfExp = 0; // Nr of dimOfExp that is used for indexing
     Expr* current = p;
     while (EDim* eDim = dynamic_cast<EDim*>(current)) {
         dimOfExp++;
-        ETyped* indexExpr = infer(eDim->expr_2, env_);
-        if (typecode(indexExpr) != TypeCode::INT) { // Check indexing only with ints
-            throw TypeError("Array index has to be an integer", p->line_number,
-                            p->char_number);
+        if (auto nonEmptyBracket = dynamic_cast<ExpDimen*>(eDim->expdim_)) {
+            ETyped* typedExpr = infer(nonEmptyBracket->expr_, env_);
+            if (typecode(typedExpr) != TypeCode::INT) { // Check indexing only with ints
+                throw TypeError("Array index has to be an integer", p->line_number,
+                                p->char_number);
+            }
+            nonEmptyBracket->expr_ = typedExpr;
         }
-        eDim->expr_2 = indexExpr;
-        current = eDim->expr_1;
+        current = eDim->expr_;
     }
     if (auto arr = dynamic_cast<EArrNew*>(current)) { // e.g. new int[4]
         Return(new ETyped(p, new Arr(arr->type_, newArrayWithNDimensions(dimOfExp))));
@@ -513,11 +521,13 @@ void TypeInferrer::visitEDim(EDim* p) {
                             p->line_number, p->char_number);
         }
         int dimOfArray = array->listdim_->size();
-        if (dimOfArray == dimOfExp) { // Inner-most dimension, i.e type of items.
+        if (dimOfExp == dimOfArray) { // Inner-most dimension, i.e type of items.
             Return(new ETyped(p, array->type_));
+        } else if (dimOfExp > dimOfArray) { // Invalid!
+            throw TypeError("Out of depth indexing of array", p->line_number, p->char_number);
         } else { // Dim(arr) - Dim(Expr) = Dimension of expr
-            Return(new ETyped(
-                p, new Arr(array->type_, newArrayWithNDimensions(dimOfArray - dimOfExp))));
+            Return(new ETyped(p, new Arr(array->type_, newArrayWithNDimensions(
+                                                           dimOfArray - dimOfExp))));
         }
     } else if (auto eApp = dynamic_cast<EApp*>(current)) { // e.g. getArr()[2]
         auto fnT = env_.findFn(eApp->ident_, p->line_number, p->char_number);

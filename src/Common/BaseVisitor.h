@@ -81,6 +81,9 @@ class BaseVisitor : public Visitor {
     void visitListType(ListType *p);
     void visitListDim(ListDim *p);
     void visitListExpr(ListExpr *p);
+    void visitExpDimen(ExpDimen *p);
+    void visitExpDimenEmpty(ExpDimenEmpty *p);
+    void visitExpDim(ExpDim *p);
 
     void visitInteger(Integer x);
     void visitChar(Char x);

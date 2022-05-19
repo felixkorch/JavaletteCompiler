@@ -295,5 +295,15 @@ void BaseVisitor::visitDim(Dim* p) {
 void BaseVisitor::visitEDim(EDim* p) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
+void BaseVisitor::visitExpDimen(ExpDimen* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+
+void BaseVisitor::visitExpDimenEmpty(ExpDimenEmpty* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitExpDim(ExpDim* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
 
 } // namespace jlc

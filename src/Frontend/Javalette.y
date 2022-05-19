@@ -68,6 +68,7 @@ extern yyscan_t bnfc_initialize_lexer(FILE * inp);
   bnfc::Type* type_;
   bnfc::ListType* listtype_;
   bnfc::ListDim* listdim_;
+  bnfc::ExpDim* expdim_;
   bnfc::Expr* expr_;
   bnfc::ListExpr* listexpr_;
   bnfc::AddOp* addop_;
@@ -144,9 +145,11 @@ extern int yylex(YYSTYPE *lvalp, YYLTYPE *llocp, yyscan_t scanner);
 %type <item_> Item
 %type <listitem_> ListItem
 %type <dim_> Dim
+%type <type_> Type1
 %type <type_> Type
 %type <listtype_> ListType
 %type <listdim_> ListDim
+%type <expdim_> ExpDim
 %type <expr_> Expr7
 %type <expr_> Expr6
 %type <expr_> Expr5
@@ -204,11 +207,14 @@ ListItem : Item { $$ = new bnfc::ListItem(); $$->push_back($1); }
 ;
 Dim : _EMPTYBRACK { $$ = new bnfc::Dimension(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
 ;
-Type : _KW_int { $$ = new bnfc::Int(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+Type1 : _KW_int { $$ = new bnfc::Int(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_double { $$ = new bnfc::Doub(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_boolean { $$ = new bnfc::Bool(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_void { $$ = new bnfc::Void(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-  | Type ListDim { std::reverse($2->begin(),$2->end()) ;$$ = new bnfc::Arr($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | _LPAREN Type _RPAREN { $$ = $2; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+;
+Type : Type ListDim { std::reverse($2->begin(),$2->end()) ;$$ = new bnfc::Arr($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | Type1 { $$ = $1; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
 ;
 ListType : /* empty */ { $$ = new bnfc::ListType(); }
   | Type { $$ = new bnfc::ListType(); $$->push_back($1); }
@@ -217,8 +223,11 @@ ListType : /* empty */ { $$ = new bnfc::ListType(); }
 ListDim : Dim { $$ = new bnfc::ListDim(); $$->push_back($1); }
   | Dim ListDim { $2->push_back($1); $$ = $2; }
 ;
-Expr7 : _KW_new Type { $$ = new bnfc::EArrNew($2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-  | Expr7 _LBRACK Expr3 _RBRACK { $$ = new bnfc::EDim($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+ExpDim : _LBRACK Expr3 _RBRACK { $$ = new bnfc::ExpDimen($2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | Dim { $$ = new bnfc::ExpDimenEmpty($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+;
+Expr7 : _KW_new Type1 { $$ = new bnfc::EArrNew($2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | Expr7 ExpDim { $$ = new bnfc::EDim($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ { $$ = new bnfc::EVar($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ _LPAREN ListExpr _RPAREN { std::reverse($3->begin(),$3->end()) ;$$ = new bnfc::EApp($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _LPAREN Expr _RPAREN { $$ = $2; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }

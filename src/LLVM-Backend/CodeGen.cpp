@@ -62,13 +62,12 @@ void Codegen::removeUnreachableCode(llvm::Function& fn) {
     }
 }
 
-llvm::Type* Codegen::getArrayType(int dim) {
-    int elementDim = dim - 1;
+llvm::Type* Codegen::getArrayType(std::size_t dim) {
+    std::size_t elementDim = dim - 1;
     if (elementDim == 0) {
-        return llvm::ArrayType::get(int32, 0);
+        return llvm::PointerType::getUnqual(llvm::ArrayType::get(int32, 0));
     }
-    return llvm::PointerType::getUnqual(
-        llvm::ArrayType::get(llvm::PointerType::getUnqual(getArrayType(dim - 1)), 0));
+    return llvm::PointerType::getUnqual(llvm::ArrayType::get(getArrayType(dim - 1), 0));
 }
 
 } // namespace jlc::codegen

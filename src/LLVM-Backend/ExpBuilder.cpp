@@ -37,6 +37,20 @@ class ArrayBuilder : public ValueVisitor<llvm::Value*> {
     }
 
     void visitEVar(EVar* p) {
+        llvm::Value* base = parent_.env_->findVar(p->ident_);
+        base = parent_.builder_->CreateLoad(base);
+
+        std::size_t n = dimSize_.size();
+
+        for(auto dim : dimSize_) {
+            llvm::Type* t = base->getType();
+            auto zero = llvm::ConstantInt::get(parent_.int32, 0);
+            llvm::Value* gep = parent_.builder_->CreateGEP(t, base, {zero, dim});
+            base = gep;
+            --n;
+        }
+        base = parent_.builder_->CreateLoad(base);
+        Return(base);
     }
 
     void visitEApp(EApp* p) {}

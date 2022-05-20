@@ -48,7 +48,7 @@ class Codegen {
     llvm::Type* doubleTy;
     llvm::Type* charPtrType;
     llvm::Type* intPtrType;
-    llvm::Type* getArrayType(int dim);
+    llvm::Type* getArrayType(std::size_t dim);
 };
 
 // Helper classes & functions

@@ -144,7 +144,7 @@ void ProgramBuilder::visitAss(Ass* p) {
     if (auto lhs = dynamic_cast<EVar*>(pTyped->expr_)) {
         llvm::Value* varPtr = parent_.env_->findVar(lhs->ident_); // Get ptr to var
         llvm::Value* RHSExp = expBuilder.Visit(p->expr_2);        // Build RHS
-        //parent_.builder_->CreateStore(RHSExp, varPtr);            // *ptr <- expr
+        parent_.builder_->CreateStore(RHSExp, varPtr);            // *ptr <- expr
     }
 }
 

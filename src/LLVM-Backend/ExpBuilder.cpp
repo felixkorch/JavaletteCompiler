@@ -2,6 +2,46 @@
 #include "BinOpBuilder.h"
 namespace jlc::codegen {
 
+class ArrayBuilder : public ValueVisitor<llvm::Value*> {
+  public:
+    std::list<llvm::Value*> dimSize_;
+    Codegen& parent_;
+
+    ArrayBuilder(Codegen& parent) : parent_(parent) {}
+
+    void visitEDim(EDim* p) {
+        if (auto dimExp = dynamic_cast<ExpDimen*>(p->expdim_)) { // Size explicitly stated
+            ExpBuilder expBuilder(parent_);
+            llvm::Value* dimValue = expBuilder.Visit(dimExp->expr_);
+            dimSize_.push_front(dimValue);
+        } else { // Size implicitly 0
+            dimSize_.push_front(llvm::ConstantInt::get(parent_.int32, 0));
+        }
+        Visit(p->expr_);
+    }
+
+    void visitEArrNew(EArrNew* p) {
+        auto arrayType = llvm::ArrayType::get(parent_.int32, dimSize_.size());
+        llvm::Value* dimList = parent_.builder_->CreateAlloca(arrayType);
+        int i = 0;
+        for (auto size : dimSize_) {
+            auto index = llvm::ConstantInt::get(parent_.int32, i++);
+            auto zero = llvm::ConstantInt::get(parent_.int32, 0);
+            llvm::Value* gep = parent_.builder_->CreateGEP(arrayType, dimList, {zero, index});
+            parent_.builder_->CreateStore(size, gep);
+        }
+        auto N = llvm::ConstantInt::get(parent_.int32, dimSize_.size());
+        auto size = llvm::ConstantInt::get(parent_.int32, getTypeSize(p->type_, parent_));
+        std::vector<llvm::Value*> args = {N, size, dimList};
+        Return(parent_.builder_->CreateCall(parent_.env_->findFn("multiArray"), args));
+    }
+
+    void visitEVar(EVar* p) {
+    }
+
+    void visitEApp(EApp* p) {}
+};
+
 void ExpBuilder::visitELitDoub(ELitDoub* p) {
     Return(llvm::ConstantFP::get(parent_.doubleTy, p->double_));
 }
@@ -134,6 +174,10 @@ void ExpBuilder::visitEOr(EOr* p) {
     parent_.builder_->SetInsertPoint(contBlock);
     result = parent_.builder_->CreateLoad(parent_.int1, result);
     Return(result);
+}
+void ExpBuilder::visitEDim(EDim* p) {
+    ArrayBuilder arrayBuilder(parent_);
+    Return(arrayBuilder.Visit(p));
 }
 
 } // namespace jlc::codegen

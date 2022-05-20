@@ -138,14 +138,14 @@ void ProgramBuilder::visitVRet(VRet* p) {
     parent_.builder_->CreateUnreachable();
 }
 
-// TODO: Might be broken, did not test the change yet
 void ProgramBuilder::visitAss(Ass* p) {
     ExpBuilder expBuilder(parent_);
-    llvm::Value* LHSExp = expBuilder.Visit(p->expr_1); // Build LHS
-    llvm::Value* RHSExp = expBuilder.Visit(p->expr_2); // Build RHS
-    EVar* eVar = dynamic_cast<EVar*>(p->expr_1);
-    llvm::Value* varPtr = parent_.env_->findVar(eVar->ident_); // Get ptr to var
-    parent_.builder_->CreateStore(RHSExp, varPtr);             // *ptr <- expr
+    ETyped* pTyped = (ETyped*)p->expr_1;
+    if (auto lhs = dynamic_cast<EVar*>(pTyped->expr_)) {
+        llvm::Value* varPtr = parent_.env_->findVar(lhs->ident_); // Get ptr to var
+        llvm::Value* RHSExp = expBuilder.Visit(p->expr_2);        // Build RHS
+        //parent_.builder_->CreateStore(RHSExp, varPtr);            // *ptr <- expr
+    }
 }
 
 void ProgramBuilder::visitCond(Cond* p) {

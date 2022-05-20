@@ -1,12 +1,12 @@
 #include "src/Common/Util.h"
-//#include "src/LLVM-Backend/CodeGen.h"
+#include "src/LLVM-Backend/CodeGen.h"
 #include "src/Frontend/Parser.h"
 #include "src/Frontend/TypeChecker.h"
 #include <iostream>
 
 using namespace jlc;
 using namespace jlc::typechecker;
-//using namespace jlc::codegen;
+using namespace jlc::codegen;
 namespace fs = std::filesystem;
 
 int main(int argc, char** argv) {
@@ -37,8 +37,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    /*
-
     Codegen codegen;
     try {
         codegen.run(typeChecker.getAbsyn());
@@ -53,7 +51,6 @@ int main(int argc, char** argv) {
     m.print(outStream, nullptr);
     std::cout << out;
 
-     */
 
     std::cerr << "OK" << std::endl;
     return 0;

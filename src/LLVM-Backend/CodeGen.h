@@ -25,6 +25,7 @@ class Codegen {
     friend class DefaultValue;
     friend class BinOpBuilder;
     friend class ExpBuilder;
+    friend class ArrayBuilder;
 
     llvm::BasicBlock* newBasicBlock();
     void declareExternFunction(const std::string& ident, llvm::Type* retType,
@@ -46,6 +47,8 @@ class Codegen {
     llvm::Type* voidTy;
     llvm::Type* doubleTy;
     llvm::Type* charPtrType;
+    llvm::Type* intPtrType;
+    llvm::Type* getArrayType(int dim);
 };
 
 // Helper classes & functions
@@ -61,6 +64,7 @@ class TypeEncoder : public ValueVisitor<llvm::Type*> {
     void visitBool(Bool* p) override { Return(parent_.int1); }
     void visitVoid(Void* p) override { Return(parent_.voidTy); }
     void visitStringLit(StringLit* p) override { Return(parent_.int8); }
+    void visitArr(Arr* p) override { Return(parent_.getArrayType(p->listdim_->size())); }
 
   private:
     Codegen& parent_;
@@ -76,10 +80,32 @@ class DefaultValue : public ValueVisitor<llvm::Constant*> {
     void visitDoub(Doub* p) override {
         Return(llvm::ConstantFP::get(parent_.doubleTy, 0.0));
     }
+    void visitArr(Arr* p) override {
+        auto t = (llvm::PointerType*)parent_.getArrayType(p->listdim_->size());
+        Return(llvm::ConstantPointerNull::get(t));
+    }
 
   private:
     Codegen& parent_;
 };
+
+// Returns the size value for each type
+class TypeSize : public ValueVisitor<std::size_t> {
+  public:
+    TypeSize(Codegen& parent) : parent_(parent) {}
+
+    void visitBool(Bool* p) override { Return(4); }
+    void visitInt(Int* p) override { Return(4); }
+    void visitDoub(Doub* p) override { Return(8); }
+
+  private:
+    Codegen& parent_;
+};
+
+inline std::size_t getTypeSize(bnfc::Type* p, Codegen& parent) {
+    TypeSize typeSize(parent);
+    return typeSize.Visit(p);
+}
 
 inline llvm::Type* getLlvmType(bnfc::Type* p, Codegen& parent) {
     TypeEncoder typeEncoder(parent);

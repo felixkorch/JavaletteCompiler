@@ -15,12 +15,14 @@ Codegen::Codegen(const std::string& moduleName) {
     voidTy = llvm::Type::getVoidTy(*context_);
     doubleTy = llvm::Type::getDoubleTy(*context_);
     charPtrType = llvm::Type::getInt8PtrTy(*context_);
+    intPtrType = llvm::Type::getInt32PtrTy(*context_);
 
     declareExternFunction("printString", voidTy, {charPtrType});
     declareExternFunction("printInt", voidTy, {int32});
     declareExternFunction("printDouble", voidTy, {doubleTy});
     declareExternFunction("readDouble", doubleTy, {});
     declareExternFunction("readInt", int32, {});
+    declareExternFunction("multiArray", intPtrType, {int32, int32, intPtrType});
 }
 
 void Codegen::run(bnfc::Prog* p) {
@@ -58,6 +60,15 @@ void Codegen::removeUnreachableCode(llvm::Function& fn) {
         }
         bb = bb->empty() ? bb->eraseFromParent() : std::next(bb);
     }
+}
+
+llvm::Type* Codegen::getArrayType(int dim) {
+    int elementDim = dim - 1;
+    if (elementDim == 0) {
+        return llvm::ArrayType::get(int32, 0);
+    }
+    return llvm::PointerType::getUnqual(
+        llvm::ArrayType::get(llvm::PointerType::getUnqual(getArrayType(dim - 1)), 0));
 }
 
 } // namespace jlc::codegen

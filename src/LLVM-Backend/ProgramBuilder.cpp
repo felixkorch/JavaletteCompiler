@@ -1,5 +1,6 @@
 #include "ProgramBuilder.h"
 #include "ExpBuilder.h"
+
 namespace jlc::codegen {
 
 /************  Some helper-visitors   ************/
@@ -15,16 +16,16 @@ class DeclBuilder : public VoidVisitor {
     void visitInit(Init* p) override {
         ExpBuilder expBuilder(parent_);
         llvm::Type* declType = getLlvmType(declType_, parent_);
-        llvm::Value* varPtr = parent_.builder_->CreateAlloca(declType);
-        llvm::Value* exp = expBuilder.Visit(p->expr_);
-        parent_.builder_->CreateStore(exp, varPtr);
-        parent_.env_->addVar(p->ident_, varPtr);
+        VAL* varPtr = B->CreateAlloca(declType);
+        VAL* exp = expBuilder.Visit(p->expr_);
+        B->CreateStore(exp, varPtr);
+        ENV->addVar(p->ident_, varPtr);
     }
     void visitNoInit(NoInit* p) override {
         llvm::Type* declType = getLlvmType(declType_, parent_);
-        llvm::Value* varPtr = parent_.builder_->CreateAlloca(declType);
-        parent_.builder_->CreateStore(getDefaultVal(declType_, parent_), varPtr);
-        parent_.env_->addVar(p->ident_, varPtr);
+        VAL* varPtr = B->CreateAlloca(declType);
+        B->CreateStore(getDefaultVal(declType_, parent_), varPtr);
+        ENV->addVar(p->ident_, varPtr);
     }
 
   private:
@@ -46,7 +47,7 @@ class FunctionAdder : public VoidVisitor {
         llvm::Function* fn = llvm::Function::Create(
             fnType, llvm::Function::ExternalLinkage, p->ident_, *parent_.module_);
 
-        parent_.env_->addSignature(p->ident_, fn);
+        ENV->addSignature(p->ident_, fn);
     }
 
   private:
@@ -57,52 +58,51 @@ class FunctionAdder : public VoidVisitor {
 class AssignmentBuilder : public VoidVisitor {
   public:
     Codegen& parent_;
-    std::list<llvm::Value*> dimIndex_{};
+    std::list<VAL*> dimIndex_{};
     bool indexing = false;
-    llvm::Value* whereToAssign = nullptr;
+    VAL* whereToAssign = nullptr;
 
     AssignmentBuilder(Codegen& parent) : parent_(parent) {}
 
     void visitAss(Ass* p) {
         ExpBuilder expBuilder(parent_);
-        llvm::Value* RHSExp = expBuilder.Visit(p->expr_2);    // Build RHS
-        Visit(p->expr_1);                                     // Build LHS
-        parent_.builder_->CreateStore(RHSExp, whereToAssign); // *ptr <- expr
+        VAL* RHSExp = expBuilder.Visit(p->expr_2); // Build RHS
+        Visit(p->expr_1);                          // Build LHS
+        B->CreateStore(RHSExp, whereToAssign);     // *ptr <- expr
     }
 
-    void visitETyped(ETyped* p) {
-        Visit(p->expr_);
-    }
+    void visitETyped(ETyped* p) { Visit(p->expr_); }
 
     void visitEDim(EDim* p) {
         indexing = true;
         if (auto dimExp = dynamic_cast<ExpDimen*>(p->expdim_)) { // Size explicitly stated
             ExpBuilder expBuilder(parent_);
-            llvm::Value* dimValue = expBuilder.Visit(dimExp->expr_);
+            VAL* dimValue = expBuilder.Visit(dimExp->expr_);
             dimIndex_.push_front(dimValue);
         } else { // Size implicitly 0
-            dimIndex_.push_front(llvm::ConstantInt::get(parent_.int32, 0));
+            dimIndex_.push_front(ZERO);
         }
         Visit(p->expr_);
     }
 
-    // Array Indexing
-    llvm::Value* indexArray(llvm::Value* base) {
+    VAL* indexArray(VAL* base) {
         for (auto dimIndex : dimIndex_) {
-            // Load ptr to an array
-            base = parent_.builder_->CreateLoad(base->getType()->getPointerElementType(),
-                                                base);
+            base = B->CreateLoad(base); // ptr* to multiArray struct
+            // Get ptr to array
+            VAL* ptrToArr =
+                B->CreateGEP(base->getType()->getPointerElementType(), base, {ZERO, ONE});
+            // Load ptr to array
+            base = B->CreateLoad(ptrToArr->getType()->getPointerElementType(), ptrToArr);
             llvm::Type* t = base->getType()->getPointerElementType();
-            auto zero = llvm::ConstantInt::get(parent_.int32, 0);
-            // Base = ptr to index of array
-            base = parent_.builder_->CreateGEP(t, base, {zero, dimIndex});
+            // Get ptr to index of array
+            base = B->CreateGEP(t, base, {ZERO, dimIndex});
         }
         return base;
     }
 
     // Variable
     void visitEVar(EVar* p) {
-        whereToAssign = parent_.env_->findVar(p->ident_);
+        whereToAssign = ENV->findVar(p->ident_);
 
         if (indexing)
             whereToAssign = indexArray(whereToAssign);
@@ -124,21 +124,20 @@ void ProgramBuilder::visitProgram(Program* p) {
 }
 
 void ProgramBuilder::visitFnDef(FnDef* p) {
-    llvm::Function* currentFn = parent_.env_->findFn(p->ident_);
-    parent_.env_->setCurrentFn(currentFn);
-    llvm::BasicBlock* bb =
-        llvm::BasicBlock::Create(*parent_.context_, p->ident_ + "_entry", currentFn);
-    parent_.builder_->SetInsertPoint(bb);
+    llvm::Function* currentFn = ENV->findFn(p->ident_);
+    ENV->setCurrentFn(currentFn);
+    BLOCK* bb = BLOCK::Create(*parent_.context_, p->ident_ + "_entry", currentFn);
+    B->SetInsertPoint(bb);
 
     // Push scope of the function to stack
-    parent_.env_->enterScope();
+    ENV->enterScope();
 
     // Add the argument variables and their corresponding Value* to current scope.
     auto argIt = currentFn->arg_begin();
     for (Arg* arg : *p->listarg_) {
-        llvm::Value* argPtr = parent_.builder_->CreateAlloca(argIt->getType());
-        parent_.builder_->CreateStore(argIt, argPtr);
-        parent_.env_->addVar(((Argument*)arg)->ident_, argPtr);
+        VAL* argPtr = B->CreateAlloca(argIt->getType());
+        B->CreateStore(argIt, argPtr);
+        ENV->addVar(((Argument*)arg)->ident_, argPtr);
         std::advance(argIt, 1);
     }
 
@@ -147,10 +146,10 @@ void ProgramBuilder::visitFnDef(FnDef* p) {
 
     // Insert return, if the function is void
     if (currentFn->getReturnType() == parent_.voidTy)
-        parent_.builder_->CreateRetVoid();
+        B->CreateRetVoid();
 
     // Pop the scope from stack
-    parent_.env_->exitScope();
+    ENV->exitScope();
 }
 
 void ProgramBuilder::visitBlock(Block* p) { Visit(p->liststmt_); }
@@ -167,9 +166,9 @@ void ProgramBuilder::visitListStmt(ListStmt* p) {
 }
 
 void ProgramBuilder::visitBStmt(BStmt* p) {
-    parent_.env_->enterScope();
+    ENV->enterScope();
     Visit(p->blk_);
-    parent_.env_->exitScope();
+    ENV->exitScope();
 }
 
 void ProgramBuilder::visitDecl(Decl* p) {
@@ -184,14 +183,14 @@ void ProgramBuilder::visitSExp(SExp* p) {
 
 void ProgramBuilder::visitRet(Ret* p) {
     ExpBuilder expBuilder(parent_);
-    llvm::Value* exp = expBuilder.Visit(p->expr_);
-    parent_.builder_->CreateRet(exp);
-    parent_.builder_->CreateUnreachable();
+    VAL* exp = expBuilder.Visit(p->expr_);
+    B->CreateRet(exp);
+    B->CreateUnreachable();
 }
 
 void ProgramBuilder::visitVRet(VRet* p) {
-    parent_.builder_->CreateRetVoid();
-    parent_.builder_->CreateUnreachable();
+    B->CreateRetVoid();
+    B->CreateUnreachable();
 }
 
 void ProgramBuilder::visitAss(Ass* p) {
@@ -201,65 +200,110 @@ void ProgramBuilder::visitAss(Ass* p) {
 
 void ProgramBuilder::visitCond(Cond* p) {
     ExpBuilder expBuilder(parent_);
-    llvm::Value* cond = expBuilder.Visit(p->expr_);
-    llvm::BasicBlock* trueBlock = parent_.newBasicBlock();
-    llvm::BasicBlock* contBlock = parent_.newBasicBlock();
-    parent_.builder_->CreateCondBr(cond, trueBlock, contBlock);
-    parent_.builder_->SetInsertPoint(trueBlock);
+    VAL* cond = expBuilder.Visit(p->expr_);
+    BLOCK* trueBlock = parent_.newBasicBlock();
+    BLOCK* contBlock = parent_.newBasicBlock();
+    B->CreateCondBr(cond, trueBlock, contBlock);
+    B->SetInsertPoint(trueBlock);
     Visit(p->stmt_);
-    parent_.builder_->CreateBr(contBlock);
-    parent_.builder_->SetInsertPoint(contBlock);
+    B->CreateBr(contBlock);
+    B->SetInsertPoint(contBlock);
     if (isLastStmt_)
-        parent_.builder_->CreateUnreachable();
+        B->CreateUnreachable();
 }
 
 void ProgramBuilder::visitCondElse(CondElse* p) {
     ExpBuilder expBuilder(parent_);
-    llvm::Value* cond = expBuilder.Visit(p->expr_);
-    llvm::BasicBlock* trueBlock = parent_.newBasicBlock();
-    llvm::BasicBlock* elseBlock = parent_.newBasicBlock();
-    llvm::BasicBlock* contBlock = parent_.newBasicBlock();
-    parent_.builder_->CreateCondBr(cond, trueBlock, elseBlock);
-    parent_.builder_->SetInsertPoint(trueBlock);
+    VAL* cond = expBuilder.Visit(p->expr_);
+    BLOCK* trueBlock = parent_.newBasicBlock();
+    BLOCK* elseBlock = parent_.newBasicBlock();
+    BLOCK* contBlock = parent_.newBasicBlock();
+    B->CreateCondBr(cond, trueBlock, elseBlock);
+    B->SetInsertPoint(trueBlock);
     Visit(p->stmt_1);
-    parent_.builder_->CreateBr(contBlock);
-    parent_.builder_->SetInsertPoint(elseBlock);
+    B->CreateBr(contBlock);
+    B->SetInsertPoint(elseBlock);
     Visit(p->stmt_2);
-    parent_.builder_->CreateBr(contBlock);
-    parent_.builder_->SetInsertPoint(contBlock);
+    B->CreateBr(contBlock);
+    B->SetInsertPoint(contBlock);
     if (isLastStmt_)
-        parent_.builder_->CreateUnreachable();
+        B->CreateUnreachable();
 }
 
 void ProgramBuilder::visitWhile(While* p) {
     ExpBuilder expBuilder(parent_);
-    llvm::BasicBlock* testBlock = parent_.newBasicBlock();
-    llvm::BasicBlock* trueBlock = parent_.newBasicBlock();
-    llvm::BasicBlock* contBlock = parent_.newBasicBlock();
-    parent_.builder_->CreateBr(testBlock);       // Connect prev. block with test-block
-    parent_.builder_->SetInsertPoint(testBlock); // Build the test-block
-    llvm::Value* cond = expBuilder.Visit(p->expr_);
-    parent_.builder_->CreateCondBr(cond, trueBlock, contBlock);
-    parent_.builder_->SetInsertPoint(trueBlock); // Then start building true-block
+    BLOCK* testBlock = parent_.newBasicBlock();
+    BLOCK* trueBlock = parent_.newBasicBlock();
+    BLOCK* contBlock = parent_.newBasicBlock();
+    B->CreateBr(testBlock);       // Connect prev. block with test-block
+    B->SetInsertPoint(testBlock); // Build the test-block
+    VAL* cond = expBuilder.Visit(p->expr_);
+    B->CreateCondBr(cond, trueBlock, contBlock);
+    B->SetInsertPoint(trueBlock); // Then start building true-block
     Visit(p->stmt_);
-    parent_.builder_->CreateBr(testBlock); // Always branch back to test-block
-    parent_.builder_->SetInsertPoint(contBlock);
+    B->CreateBr(testBlock); // Always branch back to test-block
+    B->SetInsertPoint(contBlock);
+}
+
+// TODO: Tidy up
+void ProgramBuilder::visitFor(For* p) {
+    BLOCK* testBlock = parent_.newBasicBlock();
+    BLOCK* trueBlock = parent_.newBasicBlock();
+    BLOCK* contBlock = parent_.newBasicBlock();
+
+    // Build array expr, and length
+    ExpBuilder expBuilder(parent_);
+    bnfc::Type* bnfcArrayTy = getBNFCType(p->expr_);
+    llvm::Type* arrayTy = getLlvmType(bnfcArrayTy, parent_);
+    llvm::Type* itType = getLlvmType(p->type_, parent_);
+    VAL* itPtr = B->CreateAlloca(itType);
+
+    VAL* rhs = expBuilder.Visit(p->expr_); // Ptr to array
+    VAL* len = B->CreateGEP(arrayTy->getPointerElementType(), rhs, {ZERO, ZERO});
+    len = B->CreateLoad(INT32_TY, len);
+
+    // Populate the blocks
+    VAL* iterator = B->CreateAlloca(INT32_TY);
+    B->CreateStore(ZERO, iterator);
+    B->CreateBr(testBlock);       // Connect prev. block with test-block
+    B->SetInsertPoint(testBlock); // Build the test-block
+    VAL* iteratorVal = B->CreateLoad(INT32_TY, iterator);
+    VAL* cond = B->CreateICmpSLT(iteratorVal, len);
+    VAL* add = B->CreateAdd(iteratorVal, ONE);
+    B->CreateStore(add, iterator);
+    B->CreateCondBr(cond, trueBlock, contBlock);
+    B->SetInsertPoint(trueBlock); // Then start building true-block
+    VAL* placeholder = B->CreateGEP(arrayTy->getPointerElementType(), rhs, {ZERO, ONE});
+    placeholder = B->CreateLoad(placeholder);
+    placeholder = B->CreateGEP(placeholder->getType()->getPointerElementType(),
+                               placeholder, {ZERO, iteratorVal});
+    placeholder = B->CreateLoad(placeholder);
+    B->CreateStore(placeholder, itPtr);
+
+    ENV->enterScope();
+    ENV->addVar(p->ident_, itPtr);
+    if (BStmt* bStmt = dynamic_cast<BStmt*>(p->stmt_))
+        Visit(bStmt->blk_);
+    else
+        Visit(p->stmt_);
+    ENV->exitScope();
+
+    B->CreateBr(testBlock); // Always branch back to test-block
+    B->SetInsertPoint(contBlock);
 }
 
 void ProgramBuilder::visitIncr(Incr* p) {
-    llvm::Value* varPtr = parent_.env_->findVar(p->ident_);
-    llvm::Value* var = parent_.builder_->CreateLoad(parent_.int32, varPtr);
-    llvm::Value* newVal =
-        parent_.builder_->CreateAdd(var, llvm::ConstantInt::get(parent_.int32, 1));
-    parent_.builder_->CreateStore(newVal, varPtr);
+    VAL* varPtr = ENV->findVar(p->ident_);
+    VAL* var = B->CreateLoad(INT32_TY, varPtr);
+    VAL* newVal = B->CreateAdd(var, INT32(1));
+    B->CreateStore(newVal, varPtr);
 }
 
 void ProgramBuilder::visitDecr(Decr* p) {
-    llvm::Value* varPtr = parent_.env_->findVar(p->ident_);
-    llvm::Value* var = parent_.builder_->CreateLoad(parent_.int32, varPtr);
-    llvm::Value* newVal =
-        parent_.builder_->CreateSub(var, llvm::ConstantInt::get(parent_.int32, 1));
-    parent_.builder_->CreateStore(newVal, varPtr);
+    VAL* varPtr = ENV->findVar(p->ident_);
+    VAL* var = B->CreateLoad(INT32_TY, varPtr);
+    VAL* newVal = B->CreateSub(var, INT32(1));
+    B->CreateStore(newVal, varPtr);
 }
 
 void ProgramBuilder::visitEmpty(Empty* p) {}

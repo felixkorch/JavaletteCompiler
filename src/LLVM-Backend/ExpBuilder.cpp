@@ -2,9 +2,9 @@
 #include "BinOpBuilder.h"
 namespace jlc::codegen {
 
-class ArrayBuilder : public ValueVisitor<llvm::Value*> {
+class ArrayBuilder : public ValueVisitor<VAL*> {
   public:
-    std::list<llvm::Value*> dimSize_;
+    std::list<VAL*> dimSize_;
     Codegen& parent_;
 
     ArrayBuilder(Codegen& parent) : parent_(parent) {}
@@ -12,10 +12,10 @@ class ArrayBuilder : public ValueVisitor<llvm::Value*> {
     void visitEDim(EDim* p) {
         if (auto dimExp = dynamic_cast<ExpDimen*>(p->expdim_)) { // Size explicitly stated
             ExpBuilder expBuilder(parent_);
-            llvm::Value* dimValue = expBuilder.Visit(dimExp->expr_);
+            VAL* dimValue = expBuilder.Visit(dimExp->expr_);
             dimSize_.push_front(dimValue);
         } else { // Size implicitly 0
-            dimSize_.push_front(llvm::ConstantInt::get(parent_.int32, 0));
+            dimSize_.push_front(ZERO);
         }
         Visit(p->expr_);
     }
@@ -23,80 +23,69 @@ class ArrayBuilder : public ValueVisitor<llvm::Value*> {
     void visitEArrNew(EArrNew* p) {
         auto arrayType = llvm::ArrayType::get(parent_.int32, dimSize_.size());
         std::size_t n = dimSize_.size();
-        llvm::Constant* N = llvm::ConstantInt::get(parent_.int32, n);
-        llvm::Constant* typeSize =
-            llvm::ConstantInt::get(parent_.int32, getTypeSize(p->type_, parent_));
+        CONST* typeSize = INT32(getTypeSize(p->type_, parent_));
 
-        llvm::Value* dimList = parent_.builder_->CreateAlloca(arrayType);
+        VAL* dimList = B->CreateAlloca(arrayType);
         int i = 0;
+        // Fill an array with the dimension lengths
         for (auto size : dimSize_) {
-            auto index = llvm::ConstantInt::get(parent_.int32, i++);
-            auto zero = llvm::ConstantInt::get(parent_.int32, 0);
-            llvm::Value* gep =
-                parent_.builder_->CreateGEP(arrayType, dimList, {zero, index});
-            parent_.builder_->CreateStore(size, gep);
+            VAL* gep = B->CreateGEP(arrayType, dimList, {ZERO, INT32(i++)});
+            B->CreateStore(size, gep);
         }
 
-        dimList = parent_.builder_->CreatePointerCast(dimList, parent_.intPtrType);
+        // Cast from array to ptr before passing to multiArray function
+        dimList = B->CreatePointerCast(dimList, parent_.intPtrTy);
 
-        llvm::Value* callNew = parent_.builder_->CreateCall(
-            parent_.env_->findFn("multiArray"), {N, typeSize, dimList});
-        callNew = parent_.builder_->CreatePointerCast(
-            callNew, parent_.getArrayType(n, getLlvmType(p->type_, parent_)));
+        VAL* callNew =
+            B->CreateCall(ENV->findFn("multiArray"), {INT32(n), typeSize, dimList});
+
+        callNew = B->CreatePointerCast(
+            callNew, parent_.getMultiArrTy(n, getLlvmType(p->type_, parent_)));
+
         Return(callNew);
     }
 
     void visitEVar(EVar* p) {
-        llvm::Value* base = parent_.env_->findVar(p->ident_);
+        VAL* base = ENV->findVar(p->ident_); // ptr** to multiArray struct
 
         for (auto dimIndex : dimSize_) {
-            // Load ptr to an array
-            base = parent_.builder_->CreateLoad(base->getType()->getPointerElementType(),
-                                                base);
-            llvm::Type* t = base->getType()->getPointerElementType();
-            auto zero = llvm::ConstantInt::get(parent_.int32, 0);
-            // Base = ptr to index of array
-            base = parent_.builder_->CreateGEP(t, base, {zero, dimIndex});
+            base = B->CreateLoad(base); // ptr* to multiArray struct
+            // Get ptr to array
+            VAL* ptrToArr =
+                B->CreateGEP(base->getType()->getPointerElementType(), base, {ZERO, ONE});
+            // Load ptr to array
+            base = B->CreateLoad(ptrToArr->getType()->getPointerElementType(), ptrToArr);
+            // Get ptr to index of array
+            base = B->CreateGEP(base->getType()->getPointerElementType(), base,
+                                {ZERO, dimIndex});
         }
-        base =
-            parent_.builder_->CreateLoad(base->getType()->getPointerElementType(), base);
+        base = B->CreateLoad(base->getType()->getPointerElementType(), base);
         Return(base);
     }
 
     void visitEApp(EApp* p) {}
 };
 
-void ExpBuilder::visitELitDoub(ELitDoub* p) {
-    Return(llvm::ConstantFP::get(parent_.doubleTy, p->double_));
-}
-void ExpBuilder::visitELitInt(ELitInt* p) {
-    Return(llvm::ConstantInt::get(parent_.int32, p->integer_));
-}
-
-void ExpBuilder::visitELitTrue(ELitTrue* p) {
-    Return(llvm::ConstantInt::get(parent_.int1, 1));
-}
-
-void ExpBuilder::visitELitFalse(ELitFalse* p) {
-    Return(llvm::ConstantInt::get(parent_.int1, 0));
-}
+void ExpBuilder::visitELitDoub(ELitDoub* p) { Return(DOUBLE(p->double_)); }
+void ExpBuilder::visitELitInt(ELitInt* p) { Return(INT32(p->integer_)); }
+void ExpBuilder::visitELitTrue(ELitTrue* p) { Return(INT1(1)); }
+void ExpBuilder::visitELitFalse(ELitFalse* p) { Return(INT1(0)); }
 
 void ExpBuilder::visitNeg(Neg* p) {
-    llvm::Value* exp = Visit(p->expr_);
-    if (exp->getType() == parent_.doubleTy)
-        Return(parent_.builder_->CreateFNeg(exp));
+    VAL* exp = Visit(p->expr_);
+    if (exp->getType() == DOUBLE_TY)
+        Return(B->CreateFNeg(exp));
     else
-        Return(parent_.builder_->CreateNeg(exp));
+        Return(B->CreateNeg(exp));
 }
 void ExpBuilder::visitNot(Not* p) {
-    llvm::Value* exp = Visit(p->expr_);
-    Return(parent_.builder_->CreateNot(exp));
+    VAL* exp = Visit(p->expr_);
+    Return(B->CreateNot(exp));
 }
 
 void ExpBuilder::visitEString(EString* p) {
-    llvm::Value* strRef = parent_.builder_->CreateGlobalString(p->string_);
-    llvm::Value* charPtr =
-        parent_.builder_->CreatePointerCast(strRef, parent_.charPtrType);
+    VAL* strRef = B->CreateGlobalString(p->string_);
+    VAL* charPtr = B->CreatePointerCast(strRef, parent_.charPtrTy);
     Return(charPtr);
 }
 
@@ -106,16 +95,16 @@ void ExpBuilder::visitETyped(ETyped* p) {
 }
 
 void ExpBuilder::visitEApp(EApp* p) {
-    llvm::Function* fn = parent_.env_->findFn(p->ident_);
-    std::vector<llvm::Value*> args;
+    llvm::Function* fn = ENV->findFn(p->ident_);
+    std::vector<VAL*> args;
     for (Expr* exp : *p->listexpr_)
         args.push_back(Visit(exp));
-    Return(parent_.builder_->CreateCall(fn, args));
+    Return(B->CreateCall(fn, args));
 }
 
 void ExpBuilder::visitEVar(EVar* p) {
-    llvm::Value* varPtr = parent_.env_->findVar(p->ident_);
-    Return(parent_.builder_->CreateLoad(exprType_, varPtr));
+    VAL* varPtr = ENV->findVar(p->ident_);
+    Return(B->CreateLoad(varPtr));
 }
 
 void ExpBuilder::visitEMul(EMul* p) {
@@ -134,73 +123,75 @@ void ExpBuilder::visitEAdd(EAdd* p) {
 // TODO: Make lazy semantics cleaner?
 // TODO: Using PHI + Select
 void ExpBuilder::visitEAnd(EAnd* p) {
-    llvm::BasicBlock* contBlock = parent_.newBasicBlock();
-    llvm::BasicBlock* evalSecond = parent_.newBasicBlock();
-    llvm::BasicBlock* secondTrue = parent_.newBasicBlock();
+    BLOCK* contBlock = parent_.newBasicBlock();
+    BLOCK* evalSecond = parent_.newBasicBlock();
+    BLOCK* secondTrue = parent_.newBasicBlock();
 
     // Store false by default
-    llvm::Value* result = parent_.builder_->CreateAlloca(parent_.int1);
-    parent_.builder_->CreateStore(llvm::ConstantInt::get(parent_.int1, 0), result);
+    VAL* result = B->CreateAlloca(parent_.int1);
+    B->CreateStore(INT1(0), result);
 
     // Evaluate expr 1
-    llvm::Value* e1 = Visit(p->expr_1);
-    llvm::Value* e1True =
-        parent_.builder_->CreateICmpEQ(e1, llvm::ConstantInt::get(parent_.int1, 1));
-    parent_.builder_->CreateCondBr(e1True, evalSecond, contBlock);
+    VAL* e1 = Visit(p->expr_1);
+    VAL* e1True = B->CreateICmpEQ(e1, INT1(1));
+    B->CreateCondBr(e1True, evalSecond, contBlock);
 
     // Evaluate expr 2
-    parent_.builder_->SetInsertPoint(evalSecond);
-    llvm::Value* e2 = Visit(p->expr_2);
-    llvm::Value* e2True =
-        parent_.builder_->CreateICmpEQ(e2, llvm::ConstantInt::get(parent_.int1, 1));
-    parent_.builder_->CreateCondBr(e2True, secondTrue, contBlock);
+    B->SetInsertPoint(evalSecond);
+    VAL* e2 = Visit(p->expr_2);
+    VAL* e2True = B->CreateICmpEQ(e2, INT1(1));
+    B->CreateCondBr(e2True, secondTrue, contBlock);
 
     // Store true if both true
-    parent_.builder_->SetInsertPoint(secondTrue);
-    parent_.builder_->CreateStore(llvm::ConstantInt::get(parent_.int1, 1), result);
-    parent_.builder_->CreateBr(contBlock);
+    B->SetInsertPoint(secondTrue);
+    B->CreateStore(INT1(1), result);
+    B->CreateBr(contBlock);
 
     // Finally, load result for usage in statement
-    parent_.builder_->SetInsertPoint(contBlock);
-    result = parent_.builder_->CreateLoad(parent_.int1, result);
+    B->SetInsertPoint(contBlock);
+    result = B->CreateLoad(parent_.int1, result);
     Return(result);
 }
 
 void ExpBuilder::visitEOr(EOr* p) {
-    llvm::BasicBlock* contBlock = parent_.newBasicBlock();
-    llvm::BasicBlock* evalSecond = parent_.newBasicBlock();
-    llvm::BasicBlock* secondFalse = parent_.newBasicBlock();
+    BLOCK* contBlock = parent_.newBasicBlock();
+    BLOCK* evalSecond = parent_.newBasicBlock();
+    BLOCK* secondFalse = parent_.newBasicBlock();
 
     // Store true by default
-    llvm::Value* result = parent_.builder_->CreateAlloca(parent_.int1);
-    parent_.builder_->CreateStore(llvm::ConstantInt::get(parent_.int1, 1), result);
+    VAL* result = B->CreateAlloca(parent_.int1);
+    B->CreateStore(INT1(1), result);
 
     // Evaluate expr 1
-    llvm::Value* e1 = Visit(p->expr_1);
-    llvm::Value* e1True =
-        parent_.builder_->CreateICmpEQ(e1, llvm::ConstantInt::get(parent_.int1, 1));
-    parent_.builder_->CreateCondBr(e1True, contBlock, evalSecond);
+    VAL* e1 = Visit(p->expr_1);
+    VAL* e1True = B->CreateICmpEQ(e1, INT1(1));
+    B->CreateCondBr(e1True, contBlock, evalSecond);
 
     // Evaluate expr 2
-    parent_.builder_->SetInsertPoint(evalSecond);
-    llvm::Value* e2 = Visit(p->expr_2);
-    llvm::Value* e2True =
-        parent_.builder_->CreateICmpEQ(e2, llvm::ConstantInt::get(parent_.int1, 1));
-    parent_.builder_->CreateCondBr(e2True, contBlock, secondFalse);
+    B->SetInsertPoint(evalSecond);
+    VAL* e2 = Visit(p->expr_2);
+    VAL* e2True = B->CreateICmpEQ(e2, INT1(1));
+    B->CreateCondBr(e2True, contBlock, secondFalse);
 
     // Store false if both false
-    parent_.builder_->SetInsertPoint(secondFalse);
-    parent_.builder_->CreateStore(llvm::ConstantInt::get(parent_.int1, 0), result);
-    parent_.builder_->CreateBr(contBlock);
+    B->SetInsertPoint(secondFalse);
+    B->CreateStore(INT1(0), result);
+    B->CreateBr(contBlock);
 
     // Finally, load result for usage in statement
-    parent_.builder_->SetInsertPoint(contBlock);
-    result = parent_.builder_->CreateLoad(parent_.int1, result);
+    B->SetInsertPoint(contBlock);
+    result = B->CreateLoad(INT1_TY, result);
     Return(result);
 }
 void ExpBuilder::visitEDim(EDim* p) {
     ArrayBuilder arrayBuilder(parent_);
     Return(arrayBuilder.Visit(p));
+}
+void ExpBuilder::visitEArrLen(EArrLen* p) {
+    VAL* array = Visit(p->expr_);
+    array = B->CreatePointerCast(array, ARR_STRUCT_TY);
+    VAL* len = B->CreateGEP(ARR_STRUCT_TY->getPointerElementType(), array, {ZERO, ZERO});
+    Return(B->CreateLoad(INT32_TY, len));
 }
 
 } // namespace jlc::codegen

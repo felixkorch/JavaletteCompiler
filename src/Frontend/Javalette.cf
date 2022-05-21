@@ -62,7 +62,7 @@ Bool.      Type1 ::= "boolean" ;
 
 Void.      Type1 ::= "void" ;
 
-Arr.       Type ::= Type [Dim] ;
+Arr.       Type ::= Type1 [Dim] ;
 
 internal StringLit. Type ::= "string" ;
 

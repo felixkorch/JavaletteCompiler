@@ -9,10 +9,26 @@
 namespace jlc::codegen {
 
 template <typename... Args>
-auto PointerOf(Args&&... args)
+auto GetPtrTy(Args&&... args)
     -> decltype(llvm::PointerType::getUnqual(std::forward<Args>(args)...)) {
     return llvm::PointerType::getUnqual(std::forward<Args>(args)...);
 }
+
+#define B parent_.builder_
+#define ENV parent_.env_
+#define ZERO llvm::ConstantInt::get(parent_.int32, 0)
+#define ONE llvm::ConstantInt::get(parent_.int32, 1)
+#define VAL llvm::Value
+#define CONST llvm::Constant
+#define PTR llvm::PointerType
+#define BLOCK llvm::BasicBlock
+#define INT1(X) llvm::ConstantInt::get(parent_.int1, X)
+#define INT32(X) llvm::ConstantInt::get(parent_.int32, X)
+#define DOUBLE(X) llvm::ConstantFP::get(parent_.doubleTy, X)
+#define INT32_TY parent_.int32
+#define DOUBLE_TY parent_.doubleTy
+#define INT1_TY parent_.int1
+#define ARR_STRUCT_TY parent_.arrayStructTy
 
 class Codegen {
   public:
@@ -53,9 +69,10 @@ class Codegen {
     llvm::Type* int1;
     llvm::Type* voidTy;
     llvm::Type* doubleTy;
-    llvm::Type* charPtrType;
-    llvm::Type* intPtrType;
-    llvm::Type* getArrayType(std::size_t dim, llvm::Type* t);
+    llvm::Type* charPtrTy;
+    llvm::Type* intPtrTy;
+    llvm::Type* arrayStructTy;
+    llvm::Type* getMultiArrTy(std::size_t dim, llvm::Type* t);
 };
 
 // Helper classes & functions
@@ -72,7 +89,7 @@ class TypeEncoder : public ValueVisitor<llvm::Type*> {
     void visitVoid(Void* p) override { Return(parent_.voidTy); }
     void visitStringLit(StringLit* p) override { Return(parent_.int8); }
     void visitArr(Arr* p) override {
-        Return(parent_.getArrayType(p->listdim_->size(), Visit(p->type_)));
+        Return(parent_.getMultiArrTy(p->listdim_->size(), Visit(p->type_)));
     }
 
   private:
@@ -91,9 +108,10 @@ class DefaultValue : public ValueVisitor<llvm::Constant*> {
     }
     void visitArr(Arr* p) override {
         TypeEncoder typeEncoder(parent_);
-        auto t = (llvm::PointerType*)parent_.getArrayType(p->listdim_->size(),
-                                                          typeEncoder.Visit(p->type_));
-        Return(llvm::ConstantPointerNull::get(t));
+        auto structPtr = (llvm::PointerType*)parent_.getMultiArrTy(
+            p->listdim_->size(), typeEncoder.Visit(p->type_));
+        Return(llvm::ConstantPointerNull::get(structPtr));
+
     }
 
   private:
@@ -126,6 +144,12 @@ inline llvm::Type* getLlvmType(bnfc::Type* p, Codegen& parent) {
 inline llvm::Value* getDefaultVal(bnfc::Type* p, Codegen& parent) {
     DefaultValue defaultValue(parent);
     return defaultValue.Visit(p);
+}
+
+inline bnfc::Type* getBNFCType(bnfc::Visitable* exp) {
+    ETyped* typedExpr = dynamic_cast<ETyped*>(exp);
+    JLC_ASSERT(typedExpr, "Expr not typed!");
+    return typedExpr->type_;
 }
 
 } // namespace jlc::codegen

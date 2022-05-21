@@ -27,6 +27,7 @@ class ExpBuilder : public ValueVisitor<llvm::Value*> {
     void visitEAnd(EAnd* p) override;
     void visitEOr(EOr* p) override;
     void visitEDim(EDim* p) override;
+    void visitEArrLen(EArrLen* p) override;
 
   private:
     Codegen& parent_;

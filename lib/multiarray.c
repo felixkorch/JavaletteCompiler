@@ -3,6 +3,39 @@
 #include <stdio.h>
 #include <stdint.h>
 
+typedef struct MultiArray_T {
+    int32_t length;
+    void* ptr;
+} MultiArray;
+
+MultiArray* newMultiArray(int32_t len, void* ptrTo)
+{
+    MultiArray* array = calloc(1, sizeof(MultiArray));
+    array->length = len;
+    array->ptr = ptrTo;
+    return array;
+}
+
+MultiArray* multiArray(int32_t n, int32_t size, int32_t* dimList)
+{
+    int len = dimList[0];
+
+    if (n == 1) {
+        void* content = calloc(len, size);
+        return newMultiArray(len, content);
+    }
+
+    void** span = malloc(len * sizeof(void*));
+
+    for (int i = 0; i < len; i++) {
+        span[i] = multiArray(n - 1, size, &dimList[1]);
+    }
+
+    MultiArray array = { .length = len, .ptr = span };
+    return newMultiArray(len, span);
+}
+
+/*
 void freeMultiArray(void** array, int32_t n, int32_t* dimList) {
     if (n == 1) {
         free(array);
@@ -13,23 +46,7 @@ void freeMultiArray(void** array, int32_t n, int32_t* dimList) {
             freeMultiArray(array[i], n - 1, &dimList[1]);
         }
     }
-}
-
-void* multiArray(int32_t n, int32_t size, int32_t* dimList)
-{
-    if (n == 1) {
-        return calloc(dimList[0], size);
-    }
-
-    int dim = dimList[0];
-    void** span = malloc(dim * sizeof(void*));
-
-    for (int i = 0; i < dim; i++) {
-        span[i] = multiArray(n - 1, size, &dimList[1]);
-    }
-
-    return span;
-}
+} */
 
 /*
 int main() {

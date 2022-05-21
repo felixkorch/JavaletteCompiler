@@ -3,150 +3,124 @@ source_filename = "multiarray.c"
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-pc-linux-gnu"
 
-; Function Attrs: noinline nounwind optnone sspstrong uwtable
-define dso_local void @freeMultiArray(i8** %0, i32 %1, i32* %2) #0 {
-  %4 = alloca i8**, align 8
-  %5 = alloca i32, align 4
-  %6 = alloca i32*, align 8
-  %7 = alloca i32, align 4
-  %8 = alloca i32, align 4
-  store i8** %0, i8*** %4, align 8
-  store i32 %1, i32* %5, align 4
-  store i32* %2, i32** %6, align 8
-  %9 = load i32, i32* %5, align 4
-  %10 = icmp eq i32 %9, 1
-  br i1 %10, label %11, label %14
-
-11:                                               ; preds = %3
-  %12 = load i8**, i8*** %4, align 8
-  %13 = bitcast i8** %12 to i8*
-  call void @free(i8* %13) #2
-  br label %37
-
-14:                                               ; preds = %3
-  %15 = load i32*, i32** %6, align 8
-  %16 = getelementptr inbounds i32, i32* %15, i64 0
-  %17 = load i32, i32* %16, align 4
-  store i32 %17, i32* %7, align 4
-  store i32 0, i32* %8, align 4
-  br label %18
-
-18:                                               ; preds = %33, %14
-  %19 = load i32, i32* %8, align 4
-  %20 = load i32, i32* %7, align 4
-  %21 = icmp slt i32 %19, %20
-  br i1 %21, label %22, label %36
-
-22:                                               ; preds = %18
-  %23 = load i8**, i8*** %4, align 8
-  %24 = load i32, i32* %8, align 4
-  %25 = sext i32 %24 to i64
-  %26 = getelementptr inbounds i8*, i8** %23, i64 %25
-  %27 = load i8*, i8** %26, align 8
-  %28 = bitcast i8* %27 to i8**
-  %29 = load i32, i32* %5, align 4
-  %30 = sub nsw i32 %29, 1
-  %31 = load i32*, i32** %6, align 8
-  %32 = getelementptr inbounds i32, i32* %31, i64 1
-  call void @freeMultiArray(i8** %28, i32 %30, i32* %32)
-  br label %33
-
-33:                                               ; preds = %22
-  %34 = load i32, i32* %8, align 4
-  %35 = add nsw i32 %34, 1
-  store i32 %35, i32* %8, align 4
-  br label %18, !llvm.loop !6
-
-36:                                               ; preds = %18
-  br label %37
-
-37:                                               ; preds = %36, %11
-  ret void
-}
-
-; Function Attrs: nounwind
-declare void @free(i8*) #1
+%struct.MultiArray_T = type { i32, i8* }
 
 ; Function Attrs: noinline nounwind optnone sspstrong uwtable
-define dso_local i8* @multiArray(i32 %0, i32 %1, i32* %2) #0 {
+define dso_local %struct.MultiArray_T* @newMultiArray(i32 %0, i8* %1) #0 {
+  %3 = alloca i32, align 4
   %4 = alloca i8*, align 8
-  %5 = alloca i32, align 4
-  %6 = alloca i32, align 4
-  %7 = alloca i32*, align 8
-  %8 = alloca i32, align 4
-  %9 = alloca i8**, align 8
-  %10 = alloca i32, align 4
-  store i32 %0, i32* %5, align 4
-  store i32 %1, i32* %6, align 4
-  store i32* %2, i32** %7, align 8
-  %11 = load i32, i32* %5, align 4
-  %12 = icmp eq i32 %11, 1
-  br i1 %12, label %13, label %21
-
-13:                                               ; preds = %3
-  %14 = load i32*, i32** %7, align 8
-  %15 = getelementptr inbounds i32, i32* %14, i64 0
-  %16 = load i32, i32* %15, align 4
-  %17 = sext i32 %16 to i64
-  %18 = load i32, i32* %6, align 4
-  %19 = sext i32 %18 to i64
-  %20 = call noalias align 16 i8* @calloc(i64 %17, i64 %19) #2
-  store i8* %20, i8** %4, align 8
-  br label %51
-
-21:                                               ; preds = %3
-  %22 = load i32*, i32** %7, align 8
-  %23 = getelementptr inbounds i32, i32* %22, i64 0
-  %24 = load i32, i32* %23, align 4
-  store i32 %24, i32* %8, align 4
-  %25 = load i32, i32* %8, align 4
-  %26 = sext i32 %25 to i64
-  %27 = mul i64 %26, 8
-  %28 = call noalias align 16 i8* @malloc(i64 %27) #2
-  %29 = bitcast i8* %28 to i8**
-  store i8** %29, i8*** %9, align 8
-  store i32 0, i32* %10, align 4
-  br label %30
-
-30:                                               ; preds = %45, %21
-  %31 = load i32, i32* %10, align 4
-  %32 = load i32, i32* %8, align 4
-  %33 = icmp slt i32 %31, %32
-  br i1 %33, label %34, label %48
-
-34:                                               ; preds = %30
-  %35 = load i32, i32* %5, align 4
-  %36 = sub nsw i32 %35, 1
-  %37 = load i32, i32* %6, align 4
-  %38 = load i32*, i32** %7, align 8
-  %39 = getelementptr inbounds i32, i32* %38, i64 1
-  %40 = call i8* @multiArray(i32 %36, i32 %37, i32* %39)
-  %41 = load i8**, i8*** %9, align 8
-  %42 = load i32, i32* %10, align 4
-  %43 = sext i32 %42 to i64
-  %44 = getelementptr inbounds i8*, i8** %41, i64 %43
-  store i8* %40, i8** %44, align 8
-  br label %45
-
-45:                                               ; preds = %34
-  %46 = load i32, i32* %10, align 4
-  %47 = add nsw i32 %46, 1
-  store i32 %47, i32* %10, align 4
-  br label %30, !llvm.loop !8
-
-48:                                               ; preds = %30
-  %49 = load i8**, i8*** %9, align 8
-  %50 = bitcast i8** %49 to i8*
-  store i8* %50, i8** %4, align 8
-  br label %51
-
-51:                                               ; preds = %48, %13
-  %52 = load i8*, i8** %4, align 8
-  ret i8* %52
+  %5 = alloca %struct.MultiArray_T*, align 8
+  store i32 %0, i32* %3, align 4
+  store i8* %1, i8** %4, align 8
+  %6 = call noalias align 16 i8* @calloc(i64 1, i64 16) #2
+  %7 = bitcast i8* %6 to %struct.MultiArray_T*
+  store %struct.MultiArray_T* %7, %struct.MultiArray_T** %5, align 8
+  %8 = load i32, i32* %3, align 4
+  %9 = load %struct.MultiArray_T*, %struct.MultiArray_T** %5, align 8
+  %10 = getelementptr inbounds %struct.MultiArray_T, %struct.MultiArray_T* %9, i32 0, i32 0
+  store i32 %8, i32* %10, align 8
+  %11 = load i8*, i8** %4, align 8
+  %12 = load %struct.MultiArray_T*, %struct.MultiArray_T** %5, align 8
+  %13 = getelementptr inbounds %struct.MultiArray_T, %struct.MultiArray_T* %12, i32 0, i32 1
+  store i8* %11, i8** %13, align 8
+  %14 = load %struct.MultiArray_T*, %struct.MultiArray_T** %5, align 8
+  ret %struct.MultiArray_T* %14
 }
 
 ; Function Attrs: nounwind
 declare noalias align 16 i8* @calloc(i64, i64) #1
+
+; Function Attrs: noinline nounwind optnone sspstrong uwtable
+define dso_local %struct.MultiArray_T* @multiArray(i32 %0, i32 %1, i32* %2) #0 {
+  %4 = alloca %struct.MultiArray_T*, align 8
+  %5 = alloca i32, align 4
+  %6 = alloca i32, align 4
+  %7 = alloca i32*, align 8
+  %8 = alloca i32, align 4
+  %9 = alloca i8*, align 8
+  %10 = alloca i8**, align 8
+  %11 = alloca i32, align 4
+  %12 = alloca %struct.MultiArray_T, align 8
+  store i32 %0, i32* %5, align 4
+  store i32 %1, i32* %6, align 4
+  store i32* %2, i32** %7, align 8
+  %13 = load i32*, i32** %7, align 8
+  %14 = getelementptr inbounds i32, i32* %13, i64 0
+  %15 = load i32, i32* %14, align 4
+  store i32 %15, i32* %8, align 4
+  %16 = load i32, i32* %5, align 4
+  %17 = icmp eq i32 %16, 1
+  br i1 %17, label %18, label %27
+
+18:                                               ; preds = %3
+  %19 = load i32, i32* %8, align 4
+  %20 = sext i32 %19 to i64
+  %21 = load i32, i32* %6, align 4
+  %22 = sext i32 %21 to i64
+  %23 = call noalias align 16 i8* @calloc(i64 %20, i64 %22) #2
+  store i8* %23, i8** %9, align 8
+  %24 = load i32, i32* %8, align 4
+  %25 = load i8*, i8** %9, align 8
+  %26 = call %struct.MultiArray_T* @newMultiArray(i32 %24, i8* %25)
+  store %struct.MultiArray_T* %26, %struct.MultiArray_T** %4, align 8
+  br label %62
+
+27:                                               ; preds = %3
+  %28 = load i32, i32* %8, align 4
+  %29 = sext i32 %28 to i64
+  %30 = mul i64 %29, 8
+  %31 = call noalias align 16 i8* @malloc(i64 %30) #2
+  %32 = bitcast i8* %31 to i8**
+  store i8** %32, i8*** %10, align 8
+  store i32 0, i32* %11, align 4
+  br label %33
+
+33:                                               ; preds = %49, %27
+  %34 = load i32, i32* %11, align 4
+  %35 = load i32, i32* %8, align 4
+  %36 = icmp slt i32 %34, %35
+  br i1 %36, label %37, label %52
+
+37:                                               ; preds = %33
+  %38 = load i32, i32* %5, align 4
+  %39 = sub nsw i32 %38, 1
+  %40 = load i32, i32* %6, align 4
+  %41 = load i32*, i32** %7, align 8
+  %42 = getelementptr inbounds i32, i32* %41, i64 1
+  %43 = call %struct.MultiArray_T* @multiArray(i32 %39, i32 %40, i32* %42)
+  %44 = bitcast %struct.MultiArray_T* %43 to i8*
+  %45 = load i8**, i8*** %10, align 8
+  %46 = load i32, i32* %11, align 4
+  %47 = sext i32 %46 to i64
+  %48 = getelementptr inbounds i8*, i8** %45, i64 %47
+  store i8* %44, i8** %48, align 8
+  br label %49
+
+49:                                               ; preds = %37
+  %50 = load i32, i32* %11, align 4
+  %51 = add nsw i32 %50, 1
+  store i32 %51, i32* %11, align 4
+  br label %33, !llvm.loop !6
+
+52:                                               ; preds = %33
+  %53 = getelementptr inbounds %struct.MultiArray_T, %struct.MultiArray_T* %12, i32 0, i32 0
+  %54 = load i32, i32* %8, align 4
+  store i32 %54, i32* %53, align 8
+  %55 = getelementptr inbounds %struct.MultiArray_T, %struct.MultiArray_T* %12, i32 0, i32 1
+  %56 = load i8**, i8*** %10, align 8
+  %57 = bitcast i8** %56 to i8*
+  store i8* %57, i8** %55, align 8
+  %58 = load i32, i32* %8, align 4
+  %59 = load i8**, i8*** %10, align 8
+  %60 = bitcast i8** %59 to i8*
+  %61 = call %struct.MultiArray_T* @newMultiArray(i32 %58, i8* %60)
+  store %struct.MultiArray_T* %61, %struct.MultiArray_T** %4, align 8
+  br label %62
+
+62:                                               ; preds = %52, %18
+  %63 = load %struct.MultiArray_T*, %struct.MultiArray_T** %4, align 8
+  ret %struct.MultiArray_T* %63
+}
 
 ; Function Attrs: nounwind
 declare noalias align 16 i8* @malloc(i64) #1
@@ -166,4 +140,3 @@ attributes #2 = { nounwind }
 !5 = !{!"clang version 13.0.1"}
 !6 = distinct !{!6, !7}
 !7 = !{!"llvm.loop.mustprogress"}
-!8 = distinct !{!8, !7}

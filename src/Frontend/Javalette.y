@@ -214,7 +214,7 @@ Type1 : _KW_int { $$ = new bnfc::Int(); $$->line_number = @$.first_line; $$->cha
   | _KW_void { $$ = new bnfc::Void(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _LPAREN Type _RPAREN { $$ = $2; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
 ;
-Type : Type ListDim { std::reverse($2->begin(),$2->end()) ;$$ = new bnfc::Arr($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+Type : Type1 ListDim { std::reverse($2->begin(),$2->end()) ;$$ = new bnfc::Arr($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | Type1 { $$ = $1; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
 ;
 ListType : /* empty */ { $$ = new bnfc::ListType(); }

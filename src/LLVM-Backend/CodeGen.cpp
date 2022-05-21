@@ -14,15 +14,16 @@ Codegen::Codegen(const std::string& moduleName) {
     int1 = llvm::Type::getInt1Ty(*context_);
     voidTy = llvm::Type::getVoidTy(*context_);
     doubleTy = llvm::Type::getDoubleTy(*context_);
-    charPtrType = llvm::Type::getInt8PtrTy(*context_);
-    intPtrType = llvm::Type::getInt32PtrTy(*context_);
+    charPtrTy = llvm::Type::getInt8PtrTy(*context_);
+    intPtrTy = llvm::Type::getInt32PtrTy(*context_);
+    arrayStructTy = GetPtrTy(llvm::StructType::get(*context_, {int32, intPtrTy}));
 
-    declareExternFunction("printString", voidTy, {charPtrType});
+    declareExternFunction("printString", voidTy, {charPtrTy});
     declareExternFunction("printInt", voidTy, {int32});
     declareExternFunction("printDouble", voidTy, {doubleTy});
     declareExternFunction("readDouble", doubleTy, {});
     declareExternFunction("readInt", int32, {});
-    declareExternFunction("multiArray", intPtrType, {int32, int32, intPtrType});
+    declareExternFunction("multiArray", arrayStructTy, {int32, int32, intPtrTy});
 }
 
 void Codegen::run(bnfc::Prog* p) {
@@ -63,10 +64,14 @@ void Codegen::removeUnreachableCode(llvm::Function& fn) {
 }
 
 // Returns a pointer to a multidimensional array with 'dim' dimensions and type 't'.
-llvm::Type* Codegen::getArrayType(std::size_t dim, llvm::Type* t) {
-    if (dim == 1)
-        return PointerOf(llvm::ArrayType::get(t, 0));
-    return PointerOf(llvm::ArrayType::get(getArrayType(dim - 1, t), 0));
+llvm::Type* Codegen::getMultiArrTy(std::size_t dim, llvm::Type* t) {
+
+    if (dim == 1) {
+        auto ptrTy = GetPtrTy(llvm::ArrayType::get(t, 0));
+        return GetPtrTy(llvm::StructType::get(*context_, {int32, ptrTy}));
+    }
+    auto ptrTy = GetPtrTy(llvm::ArrayType::get(getMultiArrTy(dim - 1, t), 0));
+    return GetPtrTy(llvm::StructType::get(*context_, {int32, ptrTy}));
 }
 
 } // namespace jlc::codegen

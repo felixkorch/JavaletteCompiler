@@ -1,19 +1,7 @@
 
 #include "BaseVisitor.h"
+#include "Util.h"
 #include <iostream>
-
-#ifndef NDEBUG
-#define JLC_ASSERT(condition, message)                                                   \
-    do {                                                                                 \
-        if (!(condition)) {                                                              \
-            std::cerr << "Assertion `" #condition "` failed in " << __FILE__ << " line " \
-                      << __LINE__ << ": " << message << std::endl;                       \
-            std::terminate();                                                            \
-        }                                                                                \
-    } while (false)
-#else
-#define JLC_ASSERT(condition, message)
-#endif
 
 namespace jlc {
 void BaseVisitor::visitProg(Prog* t) {}     // abstract class

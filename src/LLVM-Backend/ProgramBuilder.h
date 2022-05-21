@@ -24,6 +24,7 @@ class ProgramBuilder : public VoidVisitor {
     void visitCond(Cond* p);
     void visitCondElse(CondElse* p);
     void visitWhile(While* p);
+    void visitFor(For* p);
     void visitIncr(Incr* p);
     void visitDecr(Decr* p);
     void visitEmpty(Empty* p);

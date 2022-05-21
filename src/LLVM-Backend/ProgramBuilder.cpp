@@ -53,6 +53,62 @@ class FunctionAdder : public VoidVisitor {
     Codegen& parent_;
 };
 
+// LValue: Either Variable or Array-Indexing
+class AssignmentBuilder : public VoidVisitor {
+  public:
+    Codegen& parent_;
+    std::list<llvm::Value*> dimIndex_{};
+    bool indexing = false;
+    llvm::Value* whereToAssign = nullptr;
+
+    AssignmentBuilder(Codegen& parent) : parent_(parent) {}
+
+    void visitAss(Ass* p) {
+        ExpBuilder expBuilder(parent_);
+        llvm::Value* RHSExp = expBuilder.Visit(p->expr_2);    // Build RHS
+        Visit(p->expr_1);                                     // Build LHS
+        parent_.builder_->CreateStore(RHSExp, whereToAssign); // *ptr <- expr
+    }
+
+    void visitETyped(ETyped* p) {
+        Visit(p->expr_);
+    }
+
+    void visitEDim(EDim* p) {
+        indexing = true;
+        if (auto dimExp = dynamic_cast<ExpDimen*>(p->expdim_)) { // Size explicitly stated
+            ExpBuilder expBuilder(parent_);
+            llvm::Value* dimValue = expBuilder.Visit(dimExp->expr_);
+            dimIndex_.push_front(dimValue);
+        } else { // Size implicitly 0
+            dimIndex_.push_front(llvm::ConstantInt::get(parent_.int32, 0));
+        }
+        Visit(p->expr_);
+    }
+
+    // Array Indexing
+    llvm::Value* indexArray(llvm::Value* base) {
+        for (auto dimIndex : dimIndex_) {
+            // Load ptr to an array
+            base = parent_.builder_->CreateLoad(base->getType()->getPointerElementType(),
+                                                base);
+            llvm::Type* t = base->getType()->getPointerElementType();
+            auto zero = llvm::ConstantInt::get(parent_.int32, 0);
+            // Base = ptr to index of array
+            base = parent_.builder_->CreateGEP(t, base, {zero, dimIndex});
+        }
+        return base;
+    }
+
+    // Variable
+    void visitEVar(EVar* p) {
+        whereToAssign = parent_.env_->findVar(p->ident_);
+
+        if (indexing)
+            whereToAssign = indexArray(whereToAssign);
+    }
+};
+
 /************  Intermediate Builder   ************/
 
 ProgramBuilder::ProgramBuilder(Codegen& parent) : parent_(parent), isLastStmt_(false) {}
@@ -139,13 +195,8 @@ void ProgramBuilder::visitVRet(VRet* p) {
 }
 
 void ProgramBuilder::visitAss(Ass* p) {
-    ExpBuilder expBuilder(parent_);
-    ETyped* pTyped = (ETyped*)p->expr_1;
-    if (auto lhs = dynamic_cast<EVar*>(pTyped->expr_)) {
-        llvm::Value* varPtr = parent_.env_->findVar(lhs->ident_); // Get ptr to var
-        llvm::Value* RHSExp = expBuilder.Visit(p->expr_2);        // Build RHS
-        parent_.builder_->CreateStore(RHSExp, varPtr);            // *ptr <- expr
-    }
+    AssignmentBuilder assignmentBuilder(parent_);
+    assignmentBuilder.Visit(p);
 }
 
 void ProgramBuilder::visitCond(Cond* p) {

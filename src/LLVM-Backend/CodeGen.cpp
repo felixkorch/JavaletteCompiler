@@ -62,12 +62,11 @@ void Codegen::removeUnreachableCode(llvm::Function& fn) {
     }
 }
 
-llvm::Type* Codegen::getArrayType(std::size_t dim) {
-    std::size_t elementDim = dim - 1;
-    if (elementDim == 0) {
-        return llvm::PointerType::getUnqual(llvm::ArrayType::get(int32, 0));
-    }
-    return llvm::PointerType::getUnqual(llvm::ArrayType::get(getArrayType(dim - 1), 0));
+// Returns a pointer to a multidimensional array with 'dim' dimensions and type 't'.
+llvm::Type* Codegen::getArrayType(std::size_t dim, llvm::Type* t) {
+    if (dim == 1)
+        return PointerOf(llvm::ArrayType::get(t, 0));
+    return PointerOf(llvm::ArrayType::get(getArrayType(dim - 1, t), 0));
 }
 
 } // namespace jlc::codegen

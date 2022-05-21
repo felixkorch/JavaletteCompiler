@@ -22,34 +22,44 @@ class ArrayBuilder : public ValueVisitor<llvm::Value*> {
 
     void visitEArrNew(EArrNew* p) {
         auto arrayType = llvm::ArrayType::get(parent_.int32, dimSize_.size());
+        std::size_t n = dimSize_.size();
+        llvm::Constant* N = llvm::ConstantInt::get(parent_.int32, n);
+        llvm::Constant* typeSize =
+            llvm::ConstantInt::get(parent_.int32, getTypeSize(p->type_, parent_));
+
         llvm::Value* dimList = parent_.builder_->CreateAlloca(arrayType);
         int i = 0;
         for (auto size : dimSize_) {
             auto index = llvm::ConstantInt::get(parent_.int32, i++);
             auto zero = llvm::ConstantInt::get(parent_.int32, 0);
-            llvm::Value* gep = parent_.builder_->CreateGEP(arrayType, dimList, {zero, index});
+            llvm::Value* gep =
+                parent_.builder_->CreateGEP(arrayType, dimList, {zero, index});
             parent_.builder_->CreateStore(size, gep);
         }
-        auto N = llvm::ConstantInt::get(parent_.int32, dimSize_.size());
-        auto size = llvm::ConstantInt::get(parent_.int32, getTypeSize(p->type_, parent_));
-        std::vector<llvm::Value*> args = {N, size, dimList};
-        Return(parent_.builder_->CreateCall(parent_.env_->findFn("multiArray"), args));
+
+        dimList = parent_.builder_->CreatePointerCast(dimList, parent_.intPtrType);
+
+        llvm::Value* callNew = parent_.builder_->CreateCall(
+            parent_.env_->findFn("multiArray"), {N, typeSize, dimList});
+        callNew = parent_.builder_->CreatePointerCast(
+            callNew, parent_.getArrayType(n, getLlvmType(p->type_, parent_)));
+        Return(callNew);
     }
 
     void visitEVar(EVar* p) {
         llvm::Value* base = parent_.env_->findVar(p->ident_);
-        base = parent_.builder_->CreateLoad(base);
 
-        std::size_t n = dimSize_.size();
-
-        for(auto dim : dimSize_) {
-            llvm::Type* t = base->getType();
+        for (auto dimIndex : dimSize_) {
+            // Load ptr to an array
+            base = parent_.builder_->CreateLoad(base->getType()->getPointerElementType(),
+                                                base);
+            llvm::Type* t = base->getType()->getPointerElementType();
             auto zero = llvm::ConstantInt::get(parent_.int32, 0);
-            llvm::Value* gep = parent_.builder_->CreateGEP(t, base, {zero, dim});
-            base = gep;
-            --n;
+            // Base = ptr to index of array
+            base = parent_.builder_->CreateGEP(t, base, {zero, dimIndex});
         }
-        base = parent_.builder_->CreateLoad(base);
+        base =
+            parent_.builder_->CreateLoad(base->getType()->getPointerElementType(), base);
         Return(base);
     }
 
@@ -105,8 +115,7 @@ void ExpBuilder::visitEApp(EApp* p) {
 
 void ExpBuilder::visitEVar(EVar* p) {
     llvm::Value* varPtr = parent_.env_->findVar(p->ident_);
-    llvm::Value* var = parent_.builder_->CreateLoad(exprType_, varPtr);
-    Return(var);
+    Return(parent_.builder_->CreateLoad(exprType_, varPtr));
 }
 
 void ExpBuilder::visitEMul(EMul* p) {

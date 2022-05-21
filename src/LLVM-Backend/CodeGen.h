@@ -8,6 +8,12 @@
 
 namespace jlc::codegen {
 
+template <typename... Args>
+auto PointerOf(Args&&... args)
+    -> decltype(llvm::PointerType::getUnqual(std::forward<Args>(args)...)) {
+    return llvm::PointerType::getUnqual(std::forward<Args>(args)...);
+}
+
 class Codegen {
   public:
     Codegen(const std::string& moduleName = std::string());
@@ -26,6 +32,7 @@ class Codegen {
     friend class BinOpBuilder;
     friend class ExpBuilder;
     friend class ArrayBuilder;
+    friend class AssignmentBuilder;
 
     llvm::BasicBlock* newBasicBlock();
     void declareExternFunction(const std::string& ident, llvm::Type* retType,
@@ -48,7 +55,7 @@ class Codegen {
     llvm::Type* doubleTy;
     llvm::Type* charPtrType;
     llvm::Type* intPtrType;
-    llvm::Type* getArrayType(std::size_t dim);
+    llvm::Type* getArrayType(std::size_t dim, llvm::Type* t);
 };
 
 // Helper classes & functions
@@ -64,7 +71,9 @@ class TypeEncoder : public ValueVisitor<llvm::Type*> {
     void visitBool(Bool* p) override { Return(parent_.int1); }
     void visitVoid(Void* p) override { Return(parent_.voidTy); }
     void visitStringLit(StringLit* p) override { Return(parent_.int8); }
-    void visitArr(Arr* p) override { Return(parent_.getArrayType(p->listdim_->size())); }
+    void visitArr(Arr* p) override {
+        Return(parent_.getArrayType(p->listdim_->size(), Visit(p->type_)));
+    }
 
   private:
     Codegen& parent_;
@@ -81,7 +90,9 @@ class DefaultValue : public ValueVisitor<llvm::Constant*> {
         Return(llvm::ConstantFP::get(parent_.doubleTy, 0.0));
     }
     void visitArr(Arr* p) override {
-        auto t = (llvm::PointerType*)parent_.getArrayType(p->listdim_->size());
+        TypeEncoder typeEncoder(parent_);
+        auto t = (llvm::PointerType*)parent_.getArrayType(p->listdim_->size(),
+                                                          typeEncoder.Visit(p->type_));
         Return(llvm::ConstantPointerNull::get(t));
     }
 

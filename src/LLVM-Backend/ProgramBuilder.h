@@ -11,23 +11,23 @@ namespace jlc::codegen {
 class ProgramBuilder : public VoidVisitor {
   public:
     ProgramBuilder(Codegen& parent);
-    void visitProgram(Program* p);
-    void visitFnDef(FnDef* p);
-    void visitBlock(Block* p);
-    void visitListStmt(ListStmt* p);
-    void visitBStmt(BStmt* p);
-    void visitDecl(Decl* p);
-    void visitSExp(SExp* p);
-    void visitRet(Ret* p);
-    void visitVRet(VRet* p);
-    void visitAss(Ass* p);
-    void visitCond(Cond* p);
-    void visitCondElse(CondElse* p);
-    void visitWhile(While* p);
-    void visitFor(For* p);
-    void visitIncr(Incr* p);
-    void visitDecr(Decr* p);
-    void visitEmpty(Empty* p);
+    void visitProgram(bnfc::Program* p);
+    void visitFnDef(bnfc::FnDef* p);
+    void visitBlock(bnfc::Block* p);
+    void visitListStmt(bnfc::ListStmt* p);
+    void visitBStmt(bnfc::BStmt* p);
+    void visitDecl(bnfc::Decl* p);
+    void visitSExp(bnfc::SExp* p);
+    void visitRet(bnfc::Ret* p);
+    void visitVRet(bnfc::VRet* p);
+    void visitAss(bnfc::Ass* p);
+    void visitCond(bnfc::Cond* p);
+    void visitCondElse(bnfc::CondElse* p);
+    void visitWhile(bnfc::While* p);
+    void visitFor(bnfc::For* p);
+    void visitIncr(bnfc::Incr* p);
+    void visitDecr(bnfc::Decr* p);
+    void visitEmpty(bnfc::Empty* p);
 
   private:
     Codegen& parent_;

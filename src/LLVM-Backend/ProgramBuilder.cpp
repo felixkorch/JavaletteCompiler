@@ -3,27 +3,29 @@
 
 namespace jlc::codegen {
 
+using namespace llvm;
+
 /************  Some helper-visitors   ************/
 
 class DeclBuilder : public VoidVisitor {
   public:
     DeclBuilder(Codegen& parent) : parent_(parent), declType_() {}
-    void visitDecl(Decl* p) override {
+    void visitDecl(bnfc::Decl* p) override {
         declType_ = p->type_;
-        for (Item* i : *p->listitem_)
+        for (bnfc::Item* i : *p->listitem_)
             Visit(i);
     }
-    void visitInit(Init* p) override {
+    void visitInit(bnfc::Init* p) override {
         ExpBuilder expBuilder(parent_);
-        llvm::Type* declType = getLlvmType(declType_, parent_);
-        VAL* varPtr = B->CreateAlloca(declType);
-        VAL* exp = expBuilder.Visit(p->expr_);
+        Type* declType = getLlvmType(declType_, parent_);
+        Value* varPtr = B->CreateAlloca(declType);
+        Value* exp = expBuilder.Visit(p->expr_);
         B->CreateStore(exp, varPtr);
         ENV->addVar(p->ident_, varPtr);
     }
-    void visitNoInit(NoInit* p) override {
-        llvm::Type* declType = getLlvmType(declType_, parent_);
-        VAL* varPtr = B->CreateAlloca(declType);
+    void visitNoInit(bnfc::NoInit* p) override {
+        Type* declType = getLlvmType(declType_, parent_);
+        Value* varPtr = B->CreateAlloca(declType);
         B->CreateStore(getDefaultVal(declType_, parent_), varPtr);
         ENV->addVar(p->ident_, varPtr);
     }
@@ -37,15 +39,15 @@ class FunctionAdder : public VoidVisitor {
   public:
     FunctionAdder(Codegen& parent) : parent_(parent) {}
 
-    void visitFnDef(FnDef* p) override {
-        std::vector<llvm::Type*> argsT;
-        for (Arg* arg : *p->listarg_)
-            argsT.push_back(getLlvmType(((Argument*)arg)->type_, parent_));
+    void visitFnDef(bnfc::FnDef* p) override {
+        std::vector<Type*> argsT;
+        for (bnfc::Arg* arg : *p->listarg_)
+            argsT.push_back(getLlvmType(((bnfc::Argument*)arg)->type_, parent_));
 
         auto fnType =
-            llvm::FunctionType::get(getLlvmType(p->type_, parent_), argsT, false);
-        llvm::Function* fn = llvm::Function::Create(
-            fnType, llvm::Function::ExternalLinkage, p->ident_, *parent_.module_);
+            FunctionType::get(getLlvmType(p->type_, parent_), argsT, false);
+        Function* fn = Function::Create(
+            fnType, Function::ExternalLinkage, p->ident_, *parent_.module_);
 
         ENV->addSignature(p->ident_, fn);
     }
@@ -58,42 +60,42 @@ class FunctionAdder : public VoidVisitor {
 class AssignmentBuilder : public VoidVisitor {
   public:
     Codegen& parent_;
-    std::list<VAL*> dimIndex_{};
+    std::list<Value*> indices_{};
     bool indexing = false;
-    VAL* whereToAssign = nullptr;
+    Value* whereToAssign = nullptr;
 
     AssignmentBuilder(Codegen& parent) : parent_(parent) {}
 
-    void visitAss(Ass* p) {
+    void visitAss(bnfc::Ass* p) {
         ExpBuilder expBuilder(parent_);
-        VAL* RHSExp = expBuilder.Visit(p->expr_2); // Build RHS
+        Value* RHSExp = expBuilder.Visit(p->expr_2); // Build RHS
         Visit(p->expr_1);                          // Build LHS
         B->CreateStore(RHSExp, whereToAssign);     // *ptr <- expr
     }
 
-    void visitETyped(ETyped* p) { Visit(p->expr_); }
+    void visitETyped(bnfc::ETyped* p) { Visit(p->expr_); }
 
-    void visitEDim(EDim* p) {
+    void visitEDim(bnfc::EDim* p) {
         indexing = true;
-        if (auto dimExp = dynamic_cast<ExpDimen*>(p->expdim_)) { // Size explicitly stated
+        if (auto dimExp = dynamic_cast<bnfc::ExpDimen*>(p->expdim_)) { // Size explicitly stated
             ExpBuilder expBuilder(parent_);
-            VAL* dimValue = expBuilder.Visit(dimExp->expr_);
-            dimIndex_.push_front(dimValue);
+            Value* dimValue = expBuilder.Visit(dimExp->expr_);
+            indices_.push_front(dimValue);
         } else { // Size implicitly 0
-            dimIndex_.push_front(ZERO);
+            indices_.push_front(ZERO);
         }
         Visit(p->expr_);
     }
 
-    VAL* indexArray(VAL* base) {
-        for (auto dimIndex : dimIndex_) {
+    Value* indexArray(Value* base) {
+        for (auto dimIndex : indices_) {
             base = B->CreateLoad(base); // ptr* to multiArray struct
             // Get ptr to array
-            VAL* ptrToArr =
+            Value* ptrToArr =
                 B->CreateGEP(base->getType()->getPointerElementType(), base, {ZERO, ONE});
             // Load ptr to array
             base = B->CreateLoad(ptrToArr->getType()->getPointerElementType(), ptrToArr);
-            llvm::Type* t = base->getType()->getPointerElementType();
+            Type* t = base->getType()->getPointerElementType();
             // Get ptr to index of array
             base = B->CreateGEP(t, base, {ZERO, dimIndex});
         }
@@ -101,7 +103,7 @@ class AssignmentBuilder : public VoidVisitor {
     }
 
     // Variable
-    void visitEVar(EVar* p) {
+    void visitEVar(bnfc::EVar* p) {
         whereToAssign = ENV->findVar(p->ident_);
 
         if (indexing)
@@ -113,20 +115,20 @@ class AssignmentBuilder : public VoidVisitor {
 
 ProgramBuilder::ProgramBuilder(Codegen& parent) : parent_(parent), isLastStmt_(false) {}
 
-void ProgramBuilder::visitProgram(Program* p) {
+void ProgramBuilder::visitProgram(bnfc::Program* p) {
     // Create the functions before building each
     FunctionAdder fnAdder(parent_);
-    for (TopDef* fn : *p->listtopdef_)
+    for (bnfc::TopDef* fn : *p->listtopdef_)
         fnAdder.Visit(fn);
     // Build the function
-    for (TopDef* fn : *p->listtopdef_)
+    for (bnfc::TopDef* fn : *p->listtopdef_)
         Visit(fn);
 }
 
-void ProgramBuilder::visitFnDef(FnDef* p) {
-    llvm::Function* currentFn = ENV->findFn(p->ident_);
+void ProgramBuilder::visitFnDef(bnfc::FnDef* p) {
+    Function* currentFn = ENV->findFn(p->ident_);
     ENV->setCurrentFn(currentFn);
-    BLOCK* bb = BLOCK::Create(*parent_.context_, p->ident_ + "_entry", currentFn);
+    BasicBlock* bb = BasicBlock::Create(*parent_.context_, p->ident_ + "_entry", currentFn);
     B->SetInsertPoint(bb);
 
     // Push scope of the function to stack
@@ -134,10 +136,10 @@ void ProgramBuilder::visitFnDef(FnDef* p) {
 
     // Add the argument variables and their corresponding Value* to current scope.
     auto argIt = currentFn->arg_begin();
-    for (Arg* arg : *p->listarg_) {
-        VAL* argPtr = B->CreateAlloca(argIt->getType());
+    for (bnfc::Arg* arg : *p->listarg_) {
+        Value* argPtr = B->CreateAlloca(argIt->getType());
         B->CreateStore(argIt, argPtr);
-        ENV->addVar(((Argument*)arg)->ident_, argPtr);
+        ENV->addVar(((bnfc::Argument*)arg)->ident_, argPtr);
         std::advance(argIt, 1);
     }
 
@@ -152,9 +154,9 @@ void ProgramBuilder::visitFnDef(FnDef* p) {
     ENV->exitScope();
 }
 
-void ProgramBuilder::visitBlock(Block* p) { Visit(p->liststmt_); }
+void ProgramBuilder::visitBlock(bnfc::Block* p) { Visit(p->liststmt_); }
 
-void ProgramBuilder::visitListStmt(ListStmt* p) {
+void ProgramBuilder::visitListStmt(bnfc::ListStmt* p) {
     if (p->empty())
         return;
     auto last = p->end() - 1;
@@ -165,44 +167,44 @@ void ProgramBuilder::visitListStmt(ListStmt* p) {
     isLastStmt_ = false;
 }
 
-void ProgramBuilder::visitBStmt(BStmt* p) {
+void ProgramBuilder::visitBStmt(bnfc::BStmt* p) {
     ENV->enterScope();
     Visit(p->blk_);
     ENV->exitScope();
 }
 
-void ProgramBuilder::visitDecl(Decl* p) {
+void ProgramBuilder::visitDecl(bnfc::Decl* p) {
     DeclBuilder declBuilder(parent_);
     declBuilder.Visit(p);
 }
 
-void ProgramBuilder::visitSExp(SExp* p) {
+void ProgramBuilder::visitSExp(bnfc::SExp* p) {
     ExpBuilder expBuilder(parent_);
     expBuilder.Visit(p->expr_);
 }
 
-void ProgramBuilder::visitRet(Ret* p) {
+void ProgramBuilder::visitRet(bnfc::Ret* p) {
     ExpBuilder expBuilder(parent_);
-    VAL* exp = expBuilder.Visit(p->expr_);
+    Value* exp = expBuilder.Visit(p->expr_);
     B->CreateRet(exp);
     B->CreateUnreachable();
 }
 
-void ProgramBuilder::visitVRet(VRet* p) {
+void ProgramBuilder::visitVRet(bnfc::VRet* p) {
     B->CreateRetVoid();
     B->CreateUnreachable();
 }
 
-void ProgramBuilder::visitAss(Ass* p) {
+void ProgramBuilder::visitAss(bnfc::Ass* p) {
     AssignmentBuilder assignmentBuilder(parent_);
     assignmentBuilder.Visit(p);
 }
 
-void ProgramBuilder::visitCond(Cond* p) {
+void ProgramBuilder::visitCond(bnfc::Cond* p) {
     ExpBuilder expBuilder(parent_);
-    VAL* cond = expBuilder.Visit(p->expr_);
-    BLOCK* trueBlock = parent_.newBasicBlock();
-    BLOCK* contBlock = parent_.newBasicBlock();
+    Value* cond = expBuilder.Visit(p->expr_);
+    BasicBlock* trueBlock = parent_.newBasicBlock();
+    BasicBlock* contBlock = parent_.newBasicBlock();
     B->CreateCondBr(cond, trueBlock, contBlock);
     B->SetInsertPoint(trueBlock);
     Visit(p->stmt_);
@@ -212,12 +214,12 @@ void ProgramBuilder::visitCond(Cond* p) {
         B->CreateUnreachable();
 }
 
-void ProgramBuilder::visitCondElse(CondElse* p) {
+void ProgramBuilder::visitCondElse(bnfc::CondElse* p) {
     ExpBuilder expBuilder(parent_);
-    VAL* cond = expBuilder.Visit(p->expr_);
-    BLOCK* trueBlock = parent_.newBasicBlock();
-    BLOCK* elseBlock = parent_.newBasicBlock();
-    BLOCK* contBlock = parent_.newBasicBlock();
+    Value* cond = expBuilder.Visit(p->expr_);
+    BasicBlock* trueBlock = parent_.newBasicBlock();
+    BasicBlock* elseBlock = parent_.newBasicBlock();
+    BasicBlock* contBlock = parent_.newBasicBlock();
     B->CreateCondBr(cond, trueBlock, elseBlock);
     B->SetInsertPoint(trueBlock);
     Visit(p->stmt_1);
@@ -230,14 +232,14 @@ void ProgramBuilder::visitCondElse(CondElse* p) {
         B->CreateUnreachable();
 }
 
-void ProgramBuilder::visitWhile(While* p) {
+void ProgramBuilder::visitWhile(bnfc::While* p) {
     ExpBuilder expBuilder(parent_);
-    BLOCK* testBlock = parent_.newBasicBlock();
-    BLOCK* trueBlock = parent_.newBasicBlock();
-    BLOCK* contBlock = parent_.newBasicBlock();
+    BasicBlock* testBlock = parent_.newBasicBlock();
+    BasicBlock* trueBlock = parent_.newBasicBlock();
+    BasicBlock* contBlock = parent_.newBasicBlock();
     B->CreateBr(testBlock);       // Connect prev. block with test-block
     B->SetInsertPoint(testBlock); // Build the test-block
-    VAL* cond = expBuilder.Visit(p->expr_);
+    Value* cond = expBuilder.Visit(p->expr_);
     B->CreateCondBr(cond, trueBlock, contBlock);
     B->SetInsertPoint(trueBlock); // Then start building true-block
     Visit(p->stmt_);
@@ -246,34 +248,34 @@ void ProgramBuilder::visitWhile(While* p) {
 }
 
 // TODO: Tidy up
-void ProgramBuilder::visitFor(For* p) {
-    BLOCK* testBlock = parent_.newBasicBlock();
-    BLOCK* trueBlock = parent_.newBasicBlock();
-    BLOCK* contBlock = parent_.newBasicBlock();
+void ProgramBuilder::visitFor(bnfc::For* p) {
+    BasicBlock* testBlock = parent_.newBasicBlock();
+    BasicBlock* trueBlock = parent_.newBasicBlock();
+    BasicBlock* contBlock = parent_.newBasicBlock();
 
     // Build array expr, and length
     ExpBuilder expBuilder(parent_);
     bnfc::Type* bnfcArrayTy = getBNFCType(p->expr_);
-    llvm::Type* arrayTy = getLlvmType(bnfcArrayTy, parent_);
-    llvm::Type* itType = getLlvmType(p->type_, parent_);
-    VAL* itPtr = B->CreateAlloca(itType);
+    Type* arrayTy = getLlvmType(bnfcArrayTy, parent_);
+    Type* itType = getLlvmType(p->type_, parent_);
+    Value* itPtr = B->CreateAlloca(itType);
 
-    VAL* rhs = expBuilder.Visit(p->expr_); // Ptr to array
-    VAL* len = B->CreateGEP(arrayTy->getPointerElementType(), rhs, {ZERO, ZERO});
+    Value* rhs = expBuilder.Visit(p->expr_); // Ptr to array
+    Value* len = B->CreateGEP(arrayTy->getPointerElementType(), rhs, {ZERO, ZERO});
     len = B->CreateLoad(INT32_TY, len);
 
     // Populate the blocks
-    VAL* iterator = B->CreateAlloca(INT32_TY);
+    Value* iterator = B->CreateAlloca(INT32_TY);
     B->CreateStore(ZERO, iterator);
     B->CreateBr(testBlock);       // Connect prev. block with test-block
     B->SetInsertPoint(testBlock); // Build the test-block
-    VAL* iteratorVal = B->CreateLoad(INT32_TY, iterator);
-    VAL* cond = B->CreateICmpSLT(iteratorVal, len);
-    VAL* add = B->CreateAdd(iteratorVal, ONE);
+    Value* iteratorVal = B->CreateLoad(INT32_TY, iterator);
+    Value* cond = B->CreateICmpSLT(iteratorVal, len);
+    Value* add = B->CreateAdd(iteratorVal, ONE);
     B->CreateStore(add, iterator);
     B->CreateCondBr(cond, trueBlock, contBlock);
     B->SetInsertPoint(trueBlock); // Then start building true-block
-    VAL* placeholder = B->CreateGEP(arrayTy->getPointerElementType(), rhs, {ZERO, ONE});
+    Value* placeholder = B->CreateGEP(arrayTy->getPointerElementType(), rhs, {ZERO, ONE});
     placeholder = B->CreateLoad(placeholder);
     placeholder = B->CreateGEP(placeholder->getType()->getPointerElementType(),
                                placeholder, {ZERO, iteratorVal});
@@ -282,7 +284,7 @@ void ProgramBuilder::visitFor(For* p) {
 
     ENV->enterScope();
     ENV->addVar(p->ident_, itPtr);
-    if (BStmt* bStmt = dynamic_cast<BStmt*>(p->stmt_))
+    if (auto bStmt = dynamic_cast<bnfc::BStmt*>(p->stmt_))
         Visit(bStmt->blk_);
     else
         Visit(p->stmt_);
@@ -292,20 +294,20 @@ void ProgramBuilder::visitFor(For* p) {
     B->SetInsertPoint(contBlock);
 }
 
-void ProgramBuilder::visitIncr(Incr* p) {
-    VAL* varPtr = ENV->findVar(p->ident_);
-    VAL* var = B->CreateLoad(INT32_TY, varPtr);
-    VAL* newVal = B->CreateAdd(var, INT32(1));
+void ProgramBuilder::visitIncr(bnfc::Incr* p) {
+    Value* varPtr = ENV->findVar(p->ident_);
+    Value* var = B->CreateLoad(INT32_TY, varPtr);
+    Value* newVal = B->CreateAdd(var, INT32(1));
     B->CreateStore(newVal, varPtr);
 }
 
-void ProgramBuilder::visitDecr(Decr* p) {
-    VAL* varPtr = ENV->findVar(p->ident_);
-    VAL* var = B->CreateLoad(INT32_TY, varPtr);
-    VAL* newVal = B->CreateSub(var, INT32(1));
+void ProgramBuilder::visitDecr(bnfc::Decr* p) {
+    Value* varPtr = ENV->findVar(p->ident_);
+    Value* var = B->CreateLoad(INT32_TY, varPtr);
+    Value* newVal = B->CreateSub(var, INT32(1));
     B->CreateStore(newVal, varPtr);
 }
 
-void ProgramBuilder::visitEmpty(Empty* p) {}
+void ProgramBuilder::visitEmpty(bnfc::Empty* p) {}
 
 } // namespace jlc::codegen

@@ -4,6 +4,9 @@
 #include <iostream>
 
 namespace jlc {
+
+using namespace bnfc;
+
 void BaseVisitor::visitProg(Prog* t) {}     // abstract class
 void BaseVisitor::visitTopDef(TopDef* t) {} // abstract class
 void BaseVisitor::visitArg(Arg* t) {}       // abstract class

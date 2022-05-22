@@ -473,12 +473,13 @@ void TypeInferrer::visitEArrLen(EArrLen* p) {
         throw TypeError("Method not recognized, did you mean 'length'?", p->line_number,
                         p->char_number);
     }
-    ETyped* expr = Visit(p->expr_);
-    if (!dynamic_cast<Arr*>(expr->type_)) {
+    ETyped* eTyped = Visit(p->expr_);
+    if (!dynamic_cast<Arr*>(eTyped->type_)) {
         throw TypeError("Can only check length of array type", p->line_number,
                         p->char_number);
     }
 
+    p->expr_ = eTyped;
     Return(new ETyped(p, new Int));
 }
 

@@ -10,7 +10,7 @@ typedef struct MultiArray_T {
 
 MultiArray* newMultiArray(int32_t len, void* ptrTo)
 {
-    MultiArray* array = calloc(1, sizeof(MultiArray));
+    MultiArray* array = malloc(sizeof(MultiArray));
     array->length = len;
     array->ptr = ptrTo;
     return array;

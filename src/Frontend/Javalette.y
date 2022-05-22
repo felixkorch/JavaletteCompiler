@@ -71,6 +71,7 @@ extern yyscan_t bnfc_initialize_lexer(FILE * inp);
   bnfc::ExpDim* expdim_;
   bnfc::Expr* expr_;
   bnfc::ListExpr* listexpr_;
+  bnfc::ListExpDim* listexpdim_;
   bnfc::AddOp* addop_;
   bnfc::MulOp* mulop_;
   bnfc::RelOp* relop_;
@@ -150,8 +151,8 @@ extern int yylex(YYSTYPE *lvalp, YYLTYPE *llocp, yyscan_t scanner);
 %type <listtype_> ListType
 %type <listdim_> ListDim
 %type <expdim_> ExpDim
-%type <expr_> Expr7
 %type <expr_> Expr8
+%type <expr_> Expr7
 %type <expr_> Expr6
 %type <expr_> Expr5
 %type <expr_> Expr4
@@ -160,6 +161,7 @@ extern int yylex(YYSTYPE *lvalp, YYLTYPE *llocp, yyscan_t scanner);
 %type <expr_> Expr1
 %type <expr_> Expr
 %type <listexpr_> ListExpr
+%type <listexpdim_> ListExpDim
 %type <addop_> AddOp
 %type <mulop_> MulOp
 %type <relop_> RelOp
@@ -224,18 +226,18 @@ ListType : /* empty */ { $$ = new bnfc::ListType(); }
 ListDim : Dim { $$ = new bnfc::ListDim(); $$->push_back($1); }
   | Dim ListDim { $2->push_back($1); $$ = $2; }
 ;
-ExpDim : _LBRACK Expr3 _RBRACK { $$ = new bnfc::ExpDimen($2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+ExpDim : _LBRACK Expr _RBRACK { $$ = new bnfc::ExpDimen($2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | Dim { $$ = new bnfc::ExpDimenEmpty($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
 ;
-Expr7 : _KW_new Type1 { $$ = new bnfc::EArrNew($2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-  | _IDENT_ _LPAREN ListExpr _RPAREN { std::reverse($3->begin(),$3->end()) ;$$ = new bnfc::EApp($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-  | Expr8 { $$ = $1; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
-;
-Expr8 : Expr7 ExpDim { $$ = new bnfc::EDim($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+Expr8 : Expr8 ExpDim { $$ = new bnfc::EIndex($1, $2); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _IDENT_ { $$ = new bnfc::EVar($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | _IDENT_ _LPAREN ListExpr _RPAREN { std::reverse($3->begin(),$3->end()) ;$$ = new bnfc::EApp($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _LPAREN Expr _RPAREN { $$ = $2; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
 ;
-Expr6 : Expr6 _DOT _IDENT_ { $$ = new bnfc::EArrLen($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+Expr7 : _KW_new Type1 ListExpDim { $$ = new bnfc::EArrNew($2, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+  | Expr8 { $$ = $1; $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
+;
+Expr6 : Expr7 _DOT _IDENT_ { $$ = new bnfc::EArrLen($1, $3); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _INTEGER_ { $$ = new bnfc::ELitInt($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _DOUBLE_ { $$ = new bnfc::ELitDoub($1); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _KW_true { $$ = new bnfc::ELitTrue(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
@@ -265,6 +267,9 @@ Expr : Expr1 _DBAR Expr { $$ = new bnfc::EOr($1, $3); $$->line_number = @$.first
 ListExpr : /* empty */ { $$ = new bnfc::ListExpr(); }
   | Expr { $$ = new bnfc::ListExpr(); $$->push_back($1); }
   | Expr _COMMA ListExpr { $3->push_back($1); $$ = $3; }
+;
+ListExpDim : /* empty */ { $$ = new bnfc::ListExpDim(); }
+  | ListExpDim ExpDim { $1->push_back($2); $$ = $1; }
 ;
 AddOp : _PLUS { $$ = new bnfc::Plus(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }
   | _MINUS { $$ = new bnfc::Minus(); $$->line_number = @$.first_line; $$->char_number = @$.first_column; }

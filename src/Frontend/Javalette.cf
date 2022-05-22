@@ -74,21 +74,23 @@ separator nonempty Dim "";
 
 -- Expressions ---------------------------------------------
 
--- Note: Lifted EArrNew, EVar, EApp to Expr7 (highest precedence) so that we only can index those.
--- See EDim. below
--- Note: Changed EDim + EVar to 8 so that we can only assign to those.
--- TODO: Might restrict even more so we can't type new int[2] = 2;
+-- EIndex is left-recursive. The LHS of EIndex can only be Expr8: EVar / EApp
+-- Note: To index a 'new-expr', it needs params so it gets lifted to Expr8.
 
-ExpDimen.       ExpDim ::= "[" Expr3 "]" ;
+-- EArrLen can only be Expr7 and above(EArrNew , EApp, EVar, EIndex), since the can return an array.
+
+ExpDimen.       ExpDim ::= "[" Expr "]" ;
 ExpDimenEmpty.  ExpDim ::= Dim ;
 
-EArrNew.    Expr7 ::= "new" Type1 ;
-
-EDim.       Expr8 ::= Expr7 ExpDim ;
-
-EArrLen.    Expr6 ::= Expr6 "." Ident ;
+EIndex.     Expr8 ::= Expr8 ExpDim ;
 
 EVar.       Expr8 ::= Ident ;
+
+EApp.       Expr8 ::= Ident "(" [Expr] ")" ;
+
+EArrNew.    Expr7 ::= "new" Type1 [ExpDim] ;
+
+EArrLen.    Expr6 ::= Expr7 "." Ident ;
 
 ELitInt.    Expr6 ::= Integer ;
 
@@ -97,8 +99,6 @@ ELitDoub.   Expr6 ::= Double;
 ELitTrue.   Expr6 ::= "true" ;
 
 ELitFalse.  Expr6 ::= "false" ;
-
-EApp.       Expr7 ::= Ident "(" [Expr] ")" ;
 
 EString.    Expr6 ::= String ;
 
@@ -121,7 +121,7 @@ internal ETyped. Expr ::= "[" Expr ":" Type "]" ;
 coercions  Expr 8 ;
 
 separator  Expr "," ;
---separator  EDim "" ;
+separator  ExpDim "" ;
 
 -- operators -----------------------------------------------
 

@@ -2,88 +2,99 @@
 #include "bnfc/Absyn.H"
 
 namespace jlc {
-using namespace bnfc;
 
-class BaseVisitor : public Visitor {
+class BaseVisitor : public bnfc::Visitor {
   public:
-    void visitProg(Prog* p);
-    void visitTopDef(TopDef* p);
-    void visitArg(Arg* p);
-    void visitBlk(Blk* p);
-    void visitStmt(Stmt* p);
-    void visitItem(Item* p);
-    void visitType(Type* p);
-    void visitExpr(Expr* p);
-    void visitAddOp(AddOp* p);
-    void visitMulOp(MulOp* p);
-    void visitRelOp(RelOp* p);
-    void visitProgram(Program* p);
-    void visitFnDef(FnDef* p);
-    void visitArgument(Argument* p);
-    void visitBlock(Block* p);
-    void visitEmpty(Empty* p);
-    void visitBStmt(BStmt* p);
-    void visitDecl(Decl* p);
-    void visitNoInit(NoInit* p);
-    void visitInit(Init* p);
-    void visitAss(Ass* p);
-    void visitIncr(Incr* p);
-    void visitDecr(Decr* p);
-    void visitRet(Ret* p);
-    void visitVRet(VRet* p);
-    void visitCond(Cond* p);
-    void visitCondElse(CondElse* p);
-    void visitWhile(While* p);
-    void visitSExp(SExp* p);
-    void visitInt(Int* p);
-    void visitDoub(Doub* p);
-    void visitBool(Bool* p);
-    void visitVoid(Void* p);
-    void visitFun(Fun* p);
-    void visitEVar(EVar* p);
-    void visitELitInt(ELitInt* p);
-    void visitELitDoub(ELitDoub* p);
-    void visitELitTrue(ELitTrue* p);
-    void visitELitFalse(ELitFalse* p);
-    void visitEApp(EApp* p);
-    void visitEString(EString* p);
-    void visitNeg(Neg* p);
-    void visitNot(Not* p);
-    void visitEMul(EMul* p);
-    void visitEAdd(EAdd* p);
-    void visitERel(ERel* p);
-    void visitEAnd(EAnd* p);
-    void visitEOr(EOr* p);
-    void visitPlus(Plus* p);
-    void visitMinus(Minus* p);
-    void visitTimes(Times* p);
-    void visitDiv(Div* p);
-    void visitMod(Mod* p);
-    void visitLTH(LTH* p);
-    void visitLE(LE* p);
-    void visitGTH(GTH* p);
-    void visitGE(GE* p);
-    void visitEQU(EQU* p);
-    void visitNE(NE* p);
-    void visitListTopDef(ListTopDef* p);
-    void visitListArg(ListArg* p);
-    void visitListStmt(ListStmt* p);
-    void visitListItem(ListItem* p);
-    void visitListType(ListType* p);
-    void visitListExpr(ListExpr* p);
-    void visitETyped(ETyped* p);
-    void visitStringLit(StringLit* p);
+    void visitProg(bnfc::Prog *p);
+    void visitTopDef(bnfc::TopDef *p);
+    void visitArg(bnfc::Arg *p);
+    void visitBlk(bnfc::Blk *p);
+    void visitStmt(bnfc::Stmt *p);
+    void visitItem(bnfc::Item *p);
+    void visitDim(bnfc::Dim *p);
+    void visitType(bnfc::Type *p);
+    void visitEIndex(bnfc::EIndex *p);
+    void visitExpr(bnfc::Expr *p);
+    void visitAddOp(bnfc::AddOp *p);
+    void visitMulOp(bnfc::MulOp *p);
+    void visitRelOp(bnfc::RelOp *p);
+    void visitProgram(bnfc::Program *p);
+    void visitFnDef(bnfc::FnDef *p);
+    void visitArgument(bnfc::Argument *p);
+    void visitBlock(bnfc::Block *p);
+    void visitEmpty(bnfc::Empty *p);
+    void visitBStmt(bnfc::BStmt *p);
+    void visitDecl(bnfc::Decl *p);
+    void visitNoInit(bnfc::NoInit *p);
+    void visitInit(bnfc::Init *p);
+    void visitAss(bnfc::Ass *p);
+    void visitIncr(bnfc::Incr *p);
+    void visitDecr(bnfc::Decr *p);
+    void visitRet(bnfc::Ret *p);
+    void visitVRet(bnfc::VRet *p);
+    void visitCond(bnfc::Cond *p);
+    void visitCondElse(bnfc::CondElse *p);
+    void visitWhile(bnfc::While *p);
+    void visitFor(bnfc::For *p);
+    void visitSExp(bnfc::SExp *p);
+    void visitDimension(bnfc::Dimension *p);
+    void visitInt(bnfc::Int *p);
+    void visitDoub(bnfc::Doub *p);
+    void visitBool(bnfc::Bool *p);
+    void visitVoid(bnfc::Void *p);
+    void visitArr(bnfc::Arr *p);
+    void visitStringLit(bnfc::StringLit *p);
+    void visitFun(bnfc::Fun *p);
+    void visitEVar(bnfc::EVar *p);
+    void visitEArrLen(bnfc::EArrLen *p);
+    void visitEArrNew(bnfc::EArrNew *p);
+    void visitELitInt(bnfc::ELitInt *p);
+    void visitELitDoub(bnfc::ELitDoub *p);
+    void visitELitTrue(bnfc::ELitTrue *p);
+    void visitELitFalse(bnfc::ELitFalse *p);
+    void visitEApp(bnfc::EApp *p);
+    void visitEString(bnfc::EString *p);
+    void visitNeg(bnfc::Neg *p);
+    void visitNot(bnfc::Not *p);
+    void visitEMul(bnfc::EMul *p);
+    void visitEAdd(bnfc::EAdd *p);
+    void visitERel(bnfc::ERel *p);
+    void visitEAnd(bnfc::EAnd *p);
+    void visitEOr(bnfc::EOr *p);
+    void visitETyped(bnfc::ETyped *p);
+    void visitPlus(bnfc::Plus *p);
+    void visitMinus(bnfc::Minus *p);
+    void visitTimes(bnfc::Times *p);
+    void visitDiv(bnfc::Div *p);
+    void visitMod(bnfc::Mod *p);
+    void visitLTH(bnfc::LTH *p);
+    void visitLE(bnfc::LE *p);
+    void visitGTH(bnfc::GTH *p);
+    void visitGE(bnfc::GE *p);
+    void visitEQU(bnfc::EQU *p);
+    void visitNE(bnfc::NE *p);
+    void visitListTopDef(bnfc::ListTopDef *p);
+    void visitListArg(bnfc::ListArg *p);
+    void visitListStmt(bnfc::ListStmt *p);
+    void visitListItem(bnfc::ListItem *p);
+    void visitListType(bnfc::ListType *p);
+    void visitListDim(bnfc::ListDim *p);
+    void visitListExpr(bnfc::ListExpr *p);
+    void visitExpDimen(bnfc::ExpDimen *p);
+    void visitExpDimenEmpty(bnfc::ExpDimenEmpty *p);
+    void visitExpDim(bnfc::ExpDim *p);
+    void visitListExpDim(bnfc::ListExpDim *p);
 
-    void visitInteger(Integer x);
-    void visitChar(Char x);
-    void visitDouble(Double x);
-    void visitString(String x);
-    void visitIdent(Ident x);
+    void visitInteger(bnfc::Integer x);
+    void visitChar(bnfc::Char x);
+    void visitDouble(bnfc::Double x);
+    void visitString(bnfc::String x);
+    void visitIdent(bnfc::Ident x);
 };
 
 class VoidVisitor : public BaseVisitor {
   public:
-    void inline Visit(Visitable* p) {
+    void inline Visit(bnfc::Visitable* p) {
         p->accept(this);
     }
 };
@@ -95,7 +106,7 @@ class ValueVisitor : public BaseVisitor {
   public:
     void inline constexpr Return(ValueType v) { v_ = v; }
 
-    ValueType inline Visit(Visitable* p) {
+    ValueType inline Visit(bnfc::Visitable* p) {
         p->accept(this);
         return v_;
     }

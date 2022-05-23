@@ -30,7 +30,7 @@ Init.      Item ::= Ident "=" Expr ;
 
 separator nonempty Item "," ;
 
-Ass.       Stmt ::= Ident "=" Expr  ";" ;
+Ass.       Stmt ::= Expr "=" Expr  ";" ;
 
 Incr.      Stmt ::= Ident "++"  ";" ;
 
@@ -46,59 +46,84 @@ CondElse.  Stmt ::= "if" "(" Expr ")" Stmt "else" Stmt  ;
 
 While.     Stmt ::= "while" "(" Expr ")" Stmt ;
 
+For.       Stmt ::= "for" "(" Type Ident ":" Expr ")" Stmt ;
+
 SExp.      Stmt ::= Expr  ";" ;
+
+--SDelete    Stmt ::= "delete" Ident ;
 
 -- Types ---------------------------------------------------
 
-Int.       Type ::= "int" ;
+Dimension.  Dim ::= "[]" ;
 
-Doub.      Type ::= "double" ;
+Int.       Type1 ::= "int" ;
 
-Bool.      Type ::= "boolean" ;
+Doub.      Type1 ::= "double" ;
 
-Void.      Type ::= "void" ;
+Bool.      Type1 ::= "boolean" ;
+
+Void.      Type1 ::= "void" ;
+
+Arr.       Type ::= Type1 [Dim] ;
 
 internal StringLit. Type ::= "string" ;
 
 internal   Fun. Type ::= Type "(" [Type] ")" ;
 
+coercions  Type 1 ;
 separator  Type "," ;
+separator nonempty Dim "";
 
 -- Expressions ---------------------------------------------
 
-EVar.      Expr6 ::= Ident ;
+-- EIndex is left-recursive. The LHS of EIndex can only be Expr8: EVar / EApp
+-- Note: To index a 'new-expr', it needs params so it gets lifted to Expr8.
 
-ELitInt.   Expr6 ::= Integer ;
+-- EArrLen can only be Expr7 and above(EArrNew , EApp, EVar, EIndex), since the can return an array.
 
-ELitDoub.  Expr6 ::= Double;
+ExpDimen.       ExpDim ::= "[" Expr "]" ;
+ExpDimenEmpty.  ExpDim ::= Dim ;
 
-ELitTrue.  Expr6 ::= "true" ;
+EIndex.     Expr8 ::= Expr8 ExpDim ;
 
-ELitFalse. Expr6 ::= "false" ;
+EVar.       Expr8 ::= Ident ;
 
-EApp.      Expr6 ::= Ident "(" [Expr] ")" ;
+EApp.       Expr8 ::= Ident "(" [Expr] ")" ;
 
-EString.   Expr6 ::= String ;
+EArrNew.    Expr7 ::= "new" Type1 [ExpDim] ;
 
-Neg.       Expr5 ::= "-" Expr6 ;
+EArrLen.    Expr6 ::= Expr7 "." Ident ;
 
-Not.       Expr5 ::= "!" Expr6 ;
+ELitInt.    Expr6 ::= Integer ;
 
-EMul.      Expr4 ::= Expr4 MulOp Expr5 ;
+ELitDoub.   Expr6 ::= Double;
 
-EAdd.      Expr3 ::= Expr3 AddOp Expr4 ;
+ELitTrue.   Expr6 ::= "true" ;
 
-ERel.      Expr2 ::= Expr2 RelOp Expr3 ;
+ELitFalse.  Expr6 ::= "false" ;
 
-EAnd.      Expr1 ::= Expr2 "&&" Expr1 ;
+EString.    Expr6 ::= String ;
 
-EOr.       Expr ::= Expr1 "||" Expr ;
+Neg.        Expr5 ::= "-" Expr6 ;
+
+Not.        Expr5 ::= "!" Expr6 ;
+
+EMul.       Expr4 ::= Expr4 MulOp Expr5 ;
+
+EAdd.       Expr3 ::= Expr3 AddOp Expr4 ;
+
+ERel.       Expr2 ::= Expr2 RelOp Expr3 ;
+
+EAnd.       Expr1 ::= Expr2 "&&" Expr1 ;
+
+EOr.        Expr ::= Expr1 "||" Expr ;
 
 internal ETyped. Expr ::= "[" Expr ":" Type "]" ;
 
-coercions  Expr 6 ;
+coercions  Expr 8 ;
 
 separator  Expr "," ;
+separator  ExpDim "" ;
 
 -- operators -----------------------------------------------
 

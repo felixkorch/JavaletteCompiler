@@ -42,6 +42,8 @@ set(jlc-lib_SOURCE ${bnfc_SOURCE}
         src/X86-Backend/RegAllocator.h
         src/LLVM-Backend/ProgramBuilder.cpp
         src/LLVM-Backend/ProgramBuilder.h
+        src/LLVM-Backend/IndexBuilder.h
+        src/LLVM-Backend/IndexBuilder.cpp
         src/Common/Util.h
         src/Frontend/Parser.h)
 

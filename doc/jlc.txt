@@ -8,10 +8,8 @@ Implemented features so far:
 
 Extensions
 -------------------------------------------------------------
-Planned extensions are:
-- x86-Backend (Probably from LLVM) with some form of reg-allocation
 - Arrays
-- Pointers/Structs (If I have time to do it)
+- Multi-dimensional Arrays
 
 Prerequisites:
 -------------------------------------------------------------

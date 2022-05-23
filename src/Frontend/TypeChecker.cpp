@@ -9,11 +9,11 @@ void ProgramChecker::visitProgram(Program* p) { Visit(p->listtopdef_); }
 
 void ProgramChecker::visitListTopDef(ListTopDef* p) {
     // Add the predefined functions
-    env_.addSignature("printInt", {{TypeCode::INT}, TypeCode::VOID});
-    env_.addSignature("printDouble", {{TypeCode::DOUBLE}, TypeCode::VOID});
-    env_.addSignature("printString", {{TypeCode::STRING}, TypeCode::VOID});
-    env_.addSignature("readInt", {{}, TypeCode::INT});
-    env_.addSignature("readDouble", {{}, TypeCode::DOUBLE});
+    env_.addSignature("printInt", {{new Int}, new Void});
+    env_.addSignature("printDouble", {{new Doub}, new Void});
+    env_.addSignature("printString", {{new StringLit}, new Void});
+    env_.addSignature("readInt", {{}, new Int});
+    env_.addSignature("readDouble", {{}, new Doub});
 
     // First pass to aggregate the list of functions in signatures_
     for (TopDef* fn : *p)
@@ -29,11 +29,11 @@ void ProgramChecker::visitListTopDef(ListTopDef* p) {
 }
 
 void ProgramChecker::visitFnDef(FnDef* p) {
-    std::list<TypeCode> args;
+    std::list<Type*> args;
     for (Arg* arg : *p->listarg_)
-        args.push_back(typecode(arg));
+        args.push_back(dynamic_cast<Argument*>(arg)->type_);
 
-    env_.addSignature(p->ident_, {args, typecode(p->type_)});
+    env_.addSignature(p->ident_, {args, p->type_});
 }
 
 /********************   FunctionChecker class    ********************/
@@ -58,7 +58,7 @@ void FunctionChecker::visitListArg(ListArg* p) {
 
 void FunctionChecker::visitArgument(Argument* p) {
     // Each argument gets added to the env before StatementChecker takes over.
-    env_.addVar(p->ident_, typecode(p->type_));
+    env_.addVar(p->ident_, p->type_);
 }
 
 /********************   StatementChecker class    ********************/
@@ -72,7 +72,7 @@ void StatementChecker::visitListStmt(ListStmt* p) {
     // Check that non-void functions always return
     ReturnChecker returnChecker(env_);
     bool returns = returnChecker.Visit(p);
-    if (!returns && currentFn_.type.ret != TypeCode::VOID)
+    if (!returns && typecode(currentFn_.type.ret) != TypeCode::VOID)
         throw TypeError("Non-void function " + currentFn_.name +
                         " has to always return a value");
 }
@@ -84,19 +84,19 @@ void StatementChecker::visitBStmt(BStmt* p) {
 }
 
 void StatementChecker::visitDecr(Decr* p) {
-    TypeCode varType = env_.findVar(p->ident_, p->line_number, p->char_number);
-    if (varType != TypeCode::INT) {
+    Type* varType = env_.findVar(p->ident_, p->line_number, p->char_number);
+    if (typecode(varType) != TypeCode::INT) {
         throw TypeError("Cannot decrement " + p->ident_ + " of type " +
-                            toString(varType) + ", expected type int",
+                            toString(typecode(varType)) + ", expected type int",
                         p->line_number, p->char_number);
     }
 }
 
 void StatementChecker::visitIncr(Incr* p) {
-    TypeCode varType = env_.findVar(p->ident_, p->line_number, p->char_number);
-    if (varType != TypeCode::INT) {
+    Type* varType = env_.findVar(p->ident_, p->line_number, p->char_number);
+    if (typecode(varType) != TypeCode::INT) {
         throw TypeError("Cannot increment " + p->ident_ + " of type " +
-                            toString(varType) + ", expected type int",
+                            toString(typecode(varType)) + ", expected type int",
                         p->line_number, p->char_number);
     }
 }
@@ -136,6 +136,43 @@ void StatementChecker::visitWhile(While* p) {
     Visit(p->stmt_);
 }
 
+void StatementChecker::visitFor(For* p) {
+    ETyped* arrExpr = infer(p->expr_, env_);
+
+    if (typecode(arrExpr) != TypeCode::ARRAY) {
+        throw TypeError("Expr in for-loop has to be of array-type", p->line_number,
+                        p->char_number);
+    }
+
+    auto arr = dynamic_cast<Arr*>(arrExpr->type_);
+    if (auto iterator = dynamic_cast<Arr*>(p->type_)) {
+        if (iterator->listdim_->size() != arr->listdim_->size() - 1) {
+            throw TypeError("Iterator should be element type of array", p->line_number,
+                            p->char_number);
+        }
+    } else {
+        if (arr->listdim_->size() != 1) {
+            throw TypeError("Iterator should be element type of array", p->line_number,
+                            p->char_number);
+        }
+        if (!typesEqual(p->type_, arr->type_)) {
+            throw TypeError("Iterator should be element type of array", p->line_number,
+                            p->char_number);
+        }
+    }
+
+    env_.enterScope();
+    env_.addVar(p->ident_, p->type_);
+    // Special logic in for-loop regarding iterator variable
+    if (auto bStmt = dynamic_cast<BStmt*>(p->stmt_))
+        Visit(bStmt->blk_);
+    else
+        Visit(p->stmt_);
+    env_.exitScope();
+
+    p->expr_ = arrExpr;
+}
+
 void StatementChecker::visitBlock(Block* p) {
     for (Stmt* stmt : *p->liststmt_)
         Visit(stmt);
@@ -147,22 +184,24 @@ void StatementChecker::visitDecl(Decl* p) {
 }
 
 void StatementChecker::visitAss(Ass* p) {
-    TypeCode assignType = env_.findVar(p->ident_, p->line_number, p->char_number);
-    ETyped* exprTyped = infer(p->expr_, env_);
 
-    if (assignType != typecode(exprTyped)) {
-        throw TypeError("Expr has type " + toString(exprTyped) + ", expected " +
-                            toString(assignType) + " for variable " + p->ident_,
+    ETyped* LHSExpr = infer(p->expr_1, env_);
+    ETyped* RHSExpr = infer(p->expr_2, env_);
+
+    if (!typesEqual(LHSExpr->type_, RHSExpr->type_)) {
+        throw TypeError("expected type is " + toString(typecode(LHSExpr->type_)) +
+                            ", but got " + toString(typecode(RHSExpr->type_)),
                         p->line_number, p->char_number);
     }
-    p->expr_ = exprTyped;
+    p->expr_1 = LHSExpr;
+    p->expr_2 = RHSExpr;
 }
 
 void StatementChecker::visitRet(Ret* p) {
     ETyped* exprTyped = infer(p->expr_, env_);
-    if (typecode(exprTyped) != currentFn_.type.ret) {
+    if (typecode(exprTyped) != typecode(currentFn_.type.ret)) {
         throw TypeError("Expected return type for function " + currentFn_.name + " is " +
-                            toString(currentFn_.type.ret) + ", but got " +
+                            toString(typecode(currentFn_.type.ret)) + ", but got " +
                             toString(exprTyped),
                         p->line_number, p->char_number);
     }
@@ -170,9 +209,9 @@ void StatementChecker::visitRet(Ret* p) {
 }
 
 void StatementChecker::visitVRet(VRet* p) {
-    if (TypeCode::VOID != currentFn_.type.ret) {
+    if (TypeCode::VOID != typecode(currentFn_.type.ret)) {
         throw TypeError("Expected return type for function " + currentFn_.name + " is " +
-                            toString(currentFn_.type.ret) + ", but got " +
+                            toString(typecode(currentFn_.type.ret)) + ", but got " +
                             toString(TypeCode::VOID),
                         p->line_number, p->char_number);
     }
@@ -205,12 +244,14 @@ void StatementChecker::visitEmpty(Empty* p) {
 void ReturnChecker::visitDecr(Decr* p) {}
 void ReturnChecker::visitIncr(Incr* p) {}
 void ReturnChecker::visitWhile(While* p) {}
+void ReturnChecker::visitFor(For* p) {}
 void ReturnChecker::visitDecl(Decl* p) {}
 void ReturnChecker::visitAss(Ass* p) {}
 void ReturnChecker::visitVRet(VRet* p) {}
 void ReturnChecker::visitSExp(SExp* p) {}
 void ReturnChecker::visitEmpty(Empty* p) {}
 void ReturnChecker::visitCond(Cond* p) {}
+void ReturnChecker::visitEIndex(EIndex* p) {}
 
 void ReturnChecker::visitBStmt(BStmt* p) { Visit(p->blk_); }
 void ReturnChecker::visitRet(Ret* p) { Return(true); }
@@ -232,7 +273,7 @@ void ReturnChecker::visitCondElse(CondElse* p) {
 /********************   DeclHandler class    ********************/
 
 void DeclHandler::visitDecl(Decl* p) {
-    t = typecode(p->type_);
+    LHSType = p->type_;
     Visit(p->listitem_);
 }
 
@@ -242,17 +283,18 @@ void DeclHandler::visitListItem(ListItem* p) {
 }
 
 void DeclHandler::visitInit(Init* p) {
-    env_.addVar(p->ident_, t);
-    ETyped* exprTyped = infer(p->expr_, env_);
-    if (t != typecode(exprTyped)) {
-        throw TypeError("expected type is " + toString(t) + ", but got " +
-                            toString(exprTyped),
+    env_.addVar(p->ident_, LHSType);
+    ETyped* RHSExpr = infer(p->expr_, env_);
+
+    if (!typesEqual(LHSType, RHSExpr->type_)) {
+        throw TypeError("expected type is " + toString(typecode(LHSType)) + ", but got " +
+                            toString(RHSExpr),
                         p->expr_->line_number, p->expr_->char_number);
     }
-    p->expr_ = exprTyped;
+    p->expr_ = RHSExpr;
 }
 
-void DeclHandler::visitNoInit(NoInit* p) { env_.addVar(p->ident_, t); }
+void DeclHandler::visitNoInit(NoInit* p) { env_.addVar(p->ident_, LHSType); }
 
 /********************   TypeInferrer class    ********************/
 
@@ -300,9 +342,10 @@ void TypeInferrer::visitELitFalse(ELitFalse* p) { Return(new ETyped(p, new Bool)
 void TypeInferrer::visitELitTrue(ELitTrue* p) { Return(new ETyped(p, new Bool)); }
 void TypeInferrer::visitEString(EString* p) { Return(new ETyped(p, new StringLit)); }
 
+// Variables
 void TypeInferrer::visitEVar(EVar* p) {
-    TypeCode varType = env_.findVar(p->ident_, p->line_number, p->char_number);
-    Return(new ETyped(p, newType(varType)));
+    Type* varType = env_.findVar(p->ident_, p->line_number, p->char_number);
+    Return(new ETyped(p, varType));
 }
 
 void TypeInferrer::visitListItem(ListItem* p) {
@@ -403,16 +446,126 @@ void TypeInferrer::visitEApp(EApp* p) {
 
     for (; item != itemEnd && argType != argEnd; ++item, ++argType) {
         ETyped* itemTyped = infer(*item, env_);
-        if (typecode(itemTyped) != *argType) {
+        if (typecode(itemTyped) != typecode(*argType)) {
             throw TypeError("In call to fn " + p->ident_ + ", expected arg " +
-                                toString(*argType) + ", but got " +
+                                toString(typecode(*argType)) + ", but got " +
                                 toString(typecode(itemTyped)),
                             p->line_number, p->char_number);
         }
         *item = itemTyped;
     }
 
-    Return(new ETyped(p, newType(retType)));
+    Return(new ETyped(p, retType));
+}
+
+void TypeInferrer::visitEArrLen(EArrLen* p) {
+    if (p->ident_.compare("length") != 0) {
+        throw TypeError("Method not recognized, did you mean 'length'?", p->line_number,
+                        p->char_number);
+    }
+    ETyped* eTyped = Visit(p->expr_);
+    if (!dynamic_cast<Arr*>(eTyped->type_)) {
+        throw TypeError("Can only check length of array type", p->line_number,
+                        p->char_number);
+    }
+
+    p->expr_ = eTyped;
+    Return(new ETyped(p, new Int));
+}
+
+ListDim* newArrayWithNDimensions(int N) {
+    ListDim* listDim = new ListDim;
+    for (int i = 0; i < N; i++)
+        listDim->push_back(new Dimension);
+    return listDim;
+}
+
+// "EIndex" Base can be:
+//
+//  arr[2][3]    EVar
+//  (new int[4]) EArrNew
+//  getArr()[2]  EApp
+
+void checkDimIsInt(ExpDim* p, Env& env) {
+    if (auto expDim = dynamic_cast<ExpDimen*>(p)) { // Index explicitly stated
+        ETyped* eTyped = infer(expDim->expr_, env);
+        if (typecode(eTyped->type_) != TypeCode::INT) { // Check index INT
+            throw TypeError("Only integer indices allowed", p->line_number,
+                            p->char_number);
+        }
+        expDim->expr_ = eTyped;
+    }
+}
+
+Type* IndexChecker::getTypeOfIndexExpr(std::size_t lhsDim, std::size_t rhsDim,
+                                       Type* baseType) {
+    if (rhsDim == lhsDim)
+        return baseType;
+    ListDim* listDim = newArrayWithNDimensions(lhsDim - rhsDim);
+    return new Arr(baseType, listDim);
+}
+
+void IndexChecker::visitEIndex(EIndex* p) {
+    rhsDim_++; // +1 dimensions
+    checkDimIsInt(p->expdim_, env_);
+    Visit(p->expr_);
+    Type* indexExprType = getTypeOfIndexExpr(lhsDim_, rhsDim_, baseType_);
+    Return(new ETyped(p, indexExprType));
+}
+
+void IndexChecker::visitEArrNew(EArrNew* p) {
+    lhsDim_ = p->listexpdim_->size();
+    baseType_ = p->type_;
+    for (ExpDim* dim : *p->listexpdim_) // Check each index is int
+        checkDimIsInt(dim, env_);
+
+    if (rhsDim_ > lhsDim_) { // Check depth (exp vs type)
+        throw TypeError("Invalid depth when indexing array", p->line_number,
+                        p->char_number);
+    }
+}
+
+void IndexChecker::visitEVar(EVar* p) {
+    Type* varTy = env_.findVar(p->ident_, p->line_number, p->char_number);
+    if (typecode(varTy) != TypeCode::ARRAY)
+        throw TypeError("Indexing of non-array type", p->line_number, p->char_number);
+
+    Arr* arrTy = (Arr*)varTy;
+    lhsDim_ = arrTy->listdim_->size();
+    baseType_ = arrTy->type_;
+
+    if (rhsDim_ > lhsDim_) { // Check depth (exp vs type)
+        throw TypeError("Invalid depth when indexing array", p->line_number,
+                        p->char_number);
+    }
+}
+
+void IndexChecker::visitEApp(EApp* p) {
+    auto fnType = env_.findFn(p->ident_, p->line_number, p->char_number);
+    Type* retType = fnType.ret;
+    if (typecode(retType) != TypeCode::ARRAY)
+        throw TypeError("Indexing of non-array type", p->line_number, p->char_number);
+
+    Arr* arrTy = (Arr*)retType;
+    baseType_ = arrTy->type_;
+    lhsDim_ = arrTy->listdim_->size();
+
+    if (rhsDim_ > lhsDim_) { // Check depth (exp vs type)
+        throw TypeError("Invalid depth when indexing array", p->line_number,
+                        p->char_number);
+    }
+}
+
+void TypeInferrer::visitEIndex(EIndex* p) {
+    IndexChecker indexChecker(env_);
+    Return(indexChecker.Visit(p));
+}
+void TypeInferrer::visitEArrNew(EArrNew* p) {
+    for (ExpDim* dim : *p->listexpdim_) // Check each index is int
+        checkDimIsInt(dim, env_);
+
+    ListDim* listDim = newArrayWithNDimensions(p->listexpdim_->size());
+    Return(new ETyped(p, new Arr(p->type_, listDim)));
 }
 
 /********************   Env class    ********************/
@@ -432,7 +585,7 @@ void Env::addSignature(const std::string& fnName, const FunctionType& t) {
 }
 
 // Called when it's used in an expression, if it doesn't exist, throw
-TypeCode Env::findVar(const std::string& var, int lineNr, int charNr) {
+Type* Env::findVar(const std::string& var, int lineNr, int charNr) {
     for (auto& scope : scopes_) {
         if (auto type = map::getValue(var, scope))
             return type->get();
@@ -447,10 +600,19 @@ FunctionType& Env::findFn(const std::string& fn, int lineNr, int charNr) {
     throw TypeError("Function '" + fn + "' does not exist", lineNr, charNr);
 }
 
-void Env::addVar(const std::string& name, TypeCode t) {
+void Env::addVar(const std::string& name, Type* t) {
     Scope& currentScope = scopes_.front();
     if (auto [_, success] = currentScope.insert({name, t}); !success)
         throw TypeError("Duplicate variable '" + name + "' in scope");
+}
+
+void Env::enterFor() {
+    enterScope();
+    enteredFor_ = true;
+}
+void Env::exitFor() {
+    enteredFor_ = false;
+    exitScope();
 }
 
 /********************   Helper functions    ********************/
@@ -513,6 +675,21 @@ OpCode opcode(Visitable* p) {
 ETyped* infer(Visitable* p, Env& env) {
     TypeInferrer inf(env);
     return inf.Visit(p);
+}
+
+bool typesEqual(Type* left, Type* right) {
+    if (auto arrLeft = dynamic_cast<Arr*>(left)) {
+        if (auto arrRight = dynamic_cast<Arr*>(right)) {
+            return arrLeft->listdim_->size() == arrRight->listdim_->size();
+        } else {
+            return false;
+        }
+    } else {
+        if (auto arrRight = dynamic_cast<Arr*>(right)) {
+            return false;
+        }
+    }
+    return typecode(left) == typecode(right);
 }
 
 } // namespace jlc::typechecker

@@ -2,79 +2,80 @@
 #include "ExpBuilder.h"
 namespace jlc::codegen {
 
-BinOpBuilder::BinOpBuilder(Codegen& parent, Expr* e1, Expr* e2) : parent_(parent) {
+BinOpBuilder::BinOpBuilder(Codegen& parent, bnfc::Expr* e1, bnfc::Expr* e2)
+    : parent_(parent) {
     ExpBuilder expBuilder(parent);
     e1_ = expBuilder.Visit(e1);
     e2_ = expBuilder.Visit(e2);
 }
 
-void BinOpBuilder::visitEQU(EQU* p) {
+void BinOpBuilder::visitEQU(bnfc::EQU* p) {
     if (e1_->getType() == parent_.doubleTy)
-        Return(parent_.builder_->CreateFCmpOEQ(e1_, e2_));
+        Return(B->CreateFCmpOEQ(e1_, e2_));
     else
-        Return(parent_.builder_->CreateICmpEQ(e1_, e2_));
+        Return(B->CreateICmpEQ(e1_, e2_));
 }
-void BinOpBuilder::visitNE(NE* p) {
+void BinOpBuilder::visitNE(bnfc::NE* p) {
     if (e1_->getType() == parent_.doubleTy)
-        Return(parent_.builder_->CreateFCmpONE(e1_, e2_));
+        Return(B->CreateFCmpONE(e1_, e2_));
     else
-        Return(parent_.builder_->CreateICmpNE(e1_, e2_));
+        Return(B->CreateICmpNE(e1_, e2_));
 }
-void BinOpBuilder::visitGE(GE* p) {
+void BinOpBuilder::visitGE(bnfc::GE* p) {
     if (e1_->getType() == parent_.doubleTy)
-        Return(parent_.builder_->CreateFCmpOGE(e1_, e2_));
+        Return(B->CreateFCmpOGE(e1_, e2_));
     else
-        Return(parent_.builder_->CreateICmpSGE(e1_, e2_));
+        Return(B->CreateICmpSGE(e1_, e2_));
 }
-void BinOpBuilder::visitLTH(LTH* p) {
+void BinOpBuilder::visitLTH(bnfc::LTH* p) {
     if (e1_->getType() == parent_.doubleTy)
-        Return(parent_.builder_->CreateFCmpOLT(e1_, e2_));
+        Return(B->CreateFCmpOLT(e1_, e2_));
     else
-        Return(parent_.builder_->CreateICmpSLT(e1_, e2_));
-}
-
-void BinOpBuilder::visitLE(LE* p) {
-    if (e1_->getType() == parent_.doubleTy)
-        Return(parent_.builder_->CreateFCmpOLE(e1_, e2_));
-    else
-        Return(parent_.builder_->CreateICmpSLE(e1_, e2_));
+        Return(B->CreateICmpSLT(e1_, e2_));
 }
 
-void BinOpBuilder::visitGTH(GTH* p) {
+void BinOpBuilder::visitLE(bnfc::LE* p) {
     if (e1_->getType() == parent_.doubleTy)
-        Return(parent_.builder_->CreateFCmpOGT(e1_, e2_));
+        Return(B->CreateFCmpOLE(e1_, e2_));
     else
-        Return(parent_.builder_->CreateICmpSGT(e1_, e2_));
+        Return(B->CreateICmpSLE(e1_, e2_));
 }
 
-void BinOpBuilder::visitPlus(Plus* p) {
+void BinOpBuilder::visitGTH(bnfc::GTH* p) {
     if (e1_->getType() == parent_.doubleTy)
-        Return(parent_.builder_->CreateFAdd(e1_, e2_));
+        Return(B->CreateFCmpOGT(e1_, e2_));
     else
-        Return(parent_.builder_->CreateAdd(e1_, e2_));
+        Return(B->CreateICmpSGT(e1_, e2_));
 }
 
-void BinOpBuilder::visitMinus(Minus* p) {
+void BinOpBuilder::visitPlus(bnfc::Plus* p) {
     if (e1_->getType() == parent_.doubleTy)
-        Return(parent_.builder_->CreateFSub(e1_, e2_));
+        Return(B->CreateFAdd(e1_, e2_));
     else
-        Return(parent_.builder_->CreateSub(e1_, e2_));
+        Return(B->CreateAdd(e1_, e2_));
 }
 
-void BinOpBuilder::visitTimes(Times* p) {
+void BinOpBuilder::visitMinus(bnfc::Minus* p) {
     if (e1_->getType() == parent_.doubleTy)
-        Return(parent_.builder_->CreateFMul(e1_, e2_));
+        Return(B->CreateFSub(e1_, e2_));
     else
-        Return(parent_.builder_->CreateMul(e1_, e2_));
+        Return(B->CreateSub(e1_, e2_));
 }
 
-void BinOpBuilder::visitDiv(Div* p) {
+void BinOpBuilder::visitTimes(bnfc::Times* p) {
     if (e1_->getType() == parent_.doubleTy)
-        Return(parent_.builder_->CreateFDiv(e1_, e2_));
+        Return(B->CreateFMul(e1_, e2_));
     else
-        Return(parent_.builder_->CreateSDiv(e1_, e2_));
+        Return(B->CreateMul(e1_, e2_));
 }
 
-void BinOpBuilder::visitMod(Mod* p) { Return(parent_.builder_->CreateSRem(e1_, e2_)); }
+void BinOpBuilder::visitDiv(bnfc::Div* p) {
+    if (e1_->getType() == parent_.doubleTy)
+        Return(B->CreateFDiv(e1_, e2_));
+    else
+        Return(B->CreateSDiv(e1_, e2_));
+}
+
+void BinOpBuilder::visitMod(bnfc::Mod* p) { Return(B->CreateSRem(e1_, e2_)); }
 
 } // namespace jlc::codegen

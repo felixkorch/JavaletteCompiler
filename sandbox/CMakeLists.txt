@@ -1,6 +1,7 @@
 set(SANDBOX_FILES
     PrintTypedTree
     PrintLinearIR
+    ParserOnly
 )
 
 set(SANDBOX_OUTPUT_DIR ${CMAKE_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/sandbox)

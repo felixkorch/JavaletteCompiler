@@ -7,6 +7,19 @@
 
 namespace jlc {
 
+#ifndef NDEBUG
+#define JLC_ASSERT(condition, message)                                                   \
+    do {                                                                                 \
+        if (!(condition)) {                                                              \
+            std::cerr << "Assertion `" #condition "` failed in " << __FILE__ << " line " \
+                      << __LINE__ << ": " << message << std::endl;                       \
+            std::terminate();                                                            \
+        }                                                                                \
+    } while (false)
+#else
+#define JLC_ASSERT(condition, message)
+#endif
+
 // Returns the (start, end) of a generic container, as a pair.
 // TODO: Does not work, would be cool to implement in the future
 template <class Container> inline constexpr auto range(Container c) {

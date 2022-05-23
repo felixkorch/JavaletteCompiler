@@ -139,28 +139,38 @@ void StatementChecker::visitWhile(While* p) {
 void StatementChecker::visitFor(For* p) {
     ETyped* arrExpr = infer(p->expr_, env_);
 
-    if (Arr* arr = dynamic_cast<Arr*>(arrExpr->type_)) {
-        if (typecode(arr->type_) !=
-            typecode(p->type_)) { // iterator not matching arr-type
-            throw TypeError("Iterator must match type of array", p->line_number,
-                            p->char_number);
-        }
-
-        env_.enterScope();
-        env_.addVar(p->ident_, p->type_);
-        // Special logic in for-loop regarding iterator variable
-        if (BStmt* bStmt = dynamic_cast<BStmt*>(p->stmt_))
-            Visit(bStmt->blk_);
-        else
-            Visit(p->stmt_);
-        env_.exitScope();
-
-        p->expr_ = arrExpr;
-
-    } else {
+    if (typecode(arrExpr) != TypeCode::ARRAY) {
         throw TypeError("Expr in for-loop has to be of array-type", p->line_number,
                         p->char_number);
     }
+
+    auto arr = dynamic_cast<Arr*>(arrExpr->type_);
+    if (auto iterator = dynamic_cast<Arr*>(p->type_)) {
+        if (iterator->listdim_->size() != arr->listdim_->size() - 1) {
+            throw TypeError("Iterator should be element type of array", p->line_number,
+                            p->char_number);
+        }
+    } else {
+        if (arr->listdim_->size() != 1) {
+            throw TypeError("Iterator should be element type of array", p->line_number,
+                            p->char_number);
+        }
+        if (!typesEqual(p->type_, arr->type_)) {
+            throw TypeError("Iterator should be element type of array", p->line_number,
+                            p->char_number);
+        }
+    }
+
+    env_.enterScope();
+    env_.addVar(p->ident_, p->type_);
+    // Special logic in for-loop regarding iterator variable
+    if (auto bStmt = dynamic_cast<BStmt*>(p->stmt_))
+        Visit(bStmt->blk_);
+    else
+        Visit(p->stmt_);
+    env_.exitScope();
+
+    p->expr_ = arrExpr;
 }
 
 void StatementChecker::visitBlock(Block* p) {
@@ -178,15 +188,7 @@ void StatementChecker::visitAss(Ass* p) {
     ETyped* LHSExpr = infer(p->expr_1, env_);
     ETyped* RHSExpr = infer(p->expr_2, env_);
 
-    // Only for array-variables (LHS)!
-    if (Arr* rhs = dynamic_cast<Arr*>(RHSExpr->type_)) {
-        if (!dynamic_cast<Arr*>(LHSExpr->type_)) {
-            throw TypeError("Trying to assign a new array to non-array variable",
-                            p->line_number, p->char_number);
-        }
-    }
-
-    if (typecode(LHSExpr->type_) != typecode(RHSExpr->type_)) {
+    if (!typesEqual(LHSExpr->type_, RHSExpr->type_)) {
         throw TypeError("expected type is " + toString(typecode(LHSExpr->type_)) +
                             ", but got " + toString(typecode(RHSExpr->type_)),
                         p->line_number, p->char_number);
@@ -249,6 +251,7 @@ void ReturnChecker::visitVRet(VRet* p) {}
 void ReturnChecker::visitSExp(SExp* p) {}
 void ReturnChecker::visitEmpty(Empty* p) {}
 void ReturnChecker::visitCond(Cond* p) {}
+void ReturnChecker::visitEIndex(EIndex* p) {}
 
 void ReturnChecker::visitBStmt(BStmt* p) { Visit(p->blk_); }
 void ReturnChecker::visitRet(Ret* p) { Return(true); }
@@ -283,20 +286,7 @@ void DeclHandler::visitInit(Init* p) {
     env_.addVar(p->ident_, LHSType);
     ETyped* RHSExpr = infer(p->expr_, env_);
 
-    // Only for array-variables!
-    if (Arr* rhs = dynamic_cast<Arr*>(RHSExpr->type_)) {
-        if (Arr* lhs = dynamic_cast<Arr*>(LHSType)) {
-            if (lhs->listdim_->size() != rhs->listdim_->size()) {
-                throw TypeError("Mismatch of size when assigning new array",
-                                p->line_number, p->char_number);
-            }
-        } else {
-            throw TypeError("Trying to assign a new array to non-array variable",
-                            p->line_number, p->char_number);
-        }
-    }
-
-    if (typecode(LHSType) != typecode(RHSExpr)) {
+    if (!typesEqual(LHSType, RHSExpr->type_)) {
         throw TypeError("expected type is " + toString(typecode(LHSType)) + ", but got " +
                             toString(RHSExpr),
                         p->expr_->line_number, p->expr_->char_number);
@@ -490,57 +480,92 @@ ListDim* newArrayWithNDimensions(int N) {
     return listDim;
 }
 
-// TODO: Might have to infer type of base expr too.
-// "EDim" Base can be:
+// "EIndex" Base can be:
 //
 //  arr[2][3]    EVar
-//  new int[4]   EArrNew
+//  (new int[4]) EArrNew
 //  getArr()[2]  EApp
 
-void TypeInferrer::visitEDim(EDim* p) {
-    int dimOfExp = 0; // Nr of dimOfExp that is used for indexing
-    Expr* current = p;
-    while (EDim* eDim = dynamic_cast<EDim*>(current)) {
-        dimOfExp++;
-        if (auto nonEmptyBracket = dynamic_cast<ExpDimen*>(eDim->expdim_)) {
-            ETyped* typedExpr = infer(nonEmptyBracket->expr_, env_);
-            if (typecode(typedExpr) != TypeCode::INT) { // Check indexing only with ints
-                throw TypeError("Array index has to be an integer", p->line_number,
-                                p->char_number);
-            }
-            nonEmptyBracket->expr_ = typedExpr;
+void checkDimIsInt(ExpDim* p, Env& env) {
+    if (auto expDim = dynamic_cast<ExpDimen*>(p)) { // Index explicitly stated
+        ETyped* eTyped = infer(expDim->expr_, env);
+        if (typecode(eTyped->type_) != TypeCode::INT) { // Check index INT
+            throw TypeError("Only integer indices allowed", p->line_number,
+                            p->char_number);
         }
-        current = eDim->expr_;
+        expDim->expr_ = eTyped;
     }
-    if (auto arr = dynamic_cast<EArrNew*>(current)) { // e.g. new int[4]
-        Return(new ETyped(p, new Arr(arr->type_, newArrayWithNDimensions(dimOfExp))));
-    } else if (auto eVar = dynamic_cast<EVar*>(current)) { // e.g. arr[2][3]
-        Type* varT = env_.findVar(eVar->ident_, p->line_number, p->char_number);
-        Arr* array = dynamic_cast<Arr*>(varT);
-        if (!array) {
-            throw TypeError("Trying to index a variable that is not of type 'array'",
-                            p->line_number, p->char_number);
-        }
-        int dimOfArray = array->listdim_->size();
-        if (dimOfExp == dimOfArray) { // Inner-most dimension, i.e type of items.
-            Return(new ETyped(p, array->type_));
-        } else if (dimOfExp > dimOfArray) { // Invalid!
-            throw TypeError("Out of depth indexing of array", p->line_number, p->char_number);
-        } else { // Dim(arr) - Dim(Expr) = Dimension of expr
-            Return(new ETyped(p, new Arr(array->type_, newArrayWithNDimensions(
-                                                           dimOfArray - dimOfExp))));
-        }
-    } else if (auto eApp = dynamic_cast<EApp*>(current)) { // e.g. getArr()[2]
-        auto fnT = env_.findFn(eApp->ident_, p->line_number, p->char_number);
-        Arr* arrT = dynamic_cast<Arr*>(fnT.ret);
-        if (!arrT) {
-            throw TypeError("Trying to index a variable that is not of type 'array'",
-                            p->line_number, p->char_number);
-        }
-        Return(new ETyped(p, arrT->type_));
-    } else {
-        throw TypeError("Cannot index this type", p->line_number, p->char_number);
+}
+
+Type* IndexChecker::getTypeOfIndexExpr(std::size_t lhsDim, std::size_t rhsDim,
+                                       Type* baseType) {
+    if (rhsDim == lhsDim)
+        return baseType;
+    ListDim* listDim = newArrayWithNDimensions(lhsDim - rhsDim);
+    return new Arr(baseType, listDim);
+}
+
+void IndexChecker::visitEIndex(EIndex* p) {
+    rhsDim_++; // +1 dimensions
+    checkDimIsInt(p->expdim_, env_);
+    Visit(p->expr_);
+    Type* indexExprType = getTypeOfIndexExpr(lhsDim_, rhsDim_, baseType_);
+    Return(new ETyped(p, indexExprType));
+}
+
+void IndexChecker::visitEArrNew(EArrNew* p) {
+    lhsDim_ = p->listexpdim_->size();
+    baseType_ = p->type_;
+    for (ExpDim* dim : *p->listexpdim_) // Check each index is int
+        checkDimIsInt(dim, env_);
+
+    if (rhsDim_ > lhsDim_) { // Check depth (exp vs type)
+        throw TypeError("Invalid depth when indexing array", p->line_number,
+                        p->char_number);
     }
+}
+
+void IndexChecker::visitEVar(EVar* p) {
+    Type* varTy = env_.findVar(p->ident_, p->line_number, p->char_number);
+    if (typecode(varTy) != TypeCode::ARRAY)
+        throw TypeError("Indexing of non-array type", p->line_number, p->char_number);
+
+    Arr* arrTy = (Arr*)varTy;
+    lhsDim_ = arrTy->listdim_->size();
+    baseType_ = arrTy->type_;
+
+    if (rhsDim_ > lhsDim_) { // Check depth (exp vs type)
+        throw TypeError("Invalid depth when indexing array", p->line_number,
+                        p->char_number);
+    }
+}
+
+void IndexChecker::visitEApp(EApp* p) {
+    auto fnType = env_.findFn(p->ident_, p->line_number, p->char_number);
+    Type* retType = fnType.ret;
+    if (typecode(retType) != TypeCode::ARRAY)
+        throw TypeError("Indexing of non-array type", p->line_number, p->char_number);
+
+    Arr* arrTy = (Arr*)retType;
+    baseType_ = arrTy->type_;
+    lhsDim_ = arrTy->listdim_->size();
+
+    if (rhsDim_ > lhsDim_) { // Check depth (exp vs type)
+        throw TypeError("Invalid depth when indexing array", p->line_number,
+                        p->char_number);
+    }
+}
+
+void TypeInferrer::visitEIndex(EIndex* p) {
+    IndexChecker indexChecker(env_);
+    Return(indexChecker.Visit(p));
+}
+void TypeInferrer::visitEArrNew(EArrNew* p) {
+    for (ExpDim* dim : *p->listexpdim_) // Check each index is int
+        checkDimIsInt(dim, env_);
+
+    ListDim* listDim = newArrayWithNDimensions(p->listexpdim_->size());
+    Return(new ETyped(p, new Arr(p->type_, listDim)));
 }
 
 /********************   Env class    ********************/
@@ -650,6 +675,21 @@ OpCode opcode(Visitable* p) {
 ETyped* infer(Visitable* p, Env& env) {
     TypeInferrer inf(env);
     return inf.Visit(p);
+}
+
+bool typesEqual(Type* left, Type* right) {
+    if (auto arrLeft = dynamic_cast<Arr*>(left)) {
+        if (auto arrRight = dynamic_cast<Arr*>(right)) {
+            return arrLeft->listdim_->size() == arrRight->listdim_->size();
+        } else {
+            return false;
+        }
+    } else {
+        if (auto arrRight = dynamic_cast<Arr*>(right)) {
+            return false;
+        }
+    }
+    return typecode(left) == typecode(right);
 }
 
 } // namespace jlc::typechecker

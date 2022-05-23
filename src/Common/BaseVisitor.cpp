@@ -283,7 +283,7 @@ void BaseVisitor::visitListDim(ListDim* p) {
 void BaseVisitor::visitDim(Dim* p) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
-void BaseVisitor::visitEDim(EDim* p) {
+void BaseVisitor::visitEIndex(EIndex* p) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
 void BaseVisitor::visitExpDimen(ExpDimen* p) {
@@ -294,6 +294,9 @@ void BaseVisitor::visitExpDimenEmpty(ExpDimenEmpty* p) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
 void BaseVisitor::visitExpDim(ExpDim* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitListExpDim(bnfc::ListExpDim* p) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
 

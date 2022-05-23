@@ -1,80 +1,10 @@
 #include "ExpBuilder.h"
 #include "BinOpBuilder.h"
+#include "IndexBuilder.h"
+
 namespace jlc::codegen {
 
 using namespace llvm;
-
-class ArrayBuilder : public ValueVisitor<Value*> {
-  public:
-    std::list<Value*> indices_;
-    Codegen& parent_;
-
-    ArrayBuilder(Codegen& parent) : parent_(parent) {}
-
-    Value* indexArray(Value* base) {
-        for (auto dimIndex : indices_) {
-            base = B->CreateLoad(base); // ptr* to multiArray struct
-            // Get ptr to array
-            Value* ptrToArr =
-                B->CreateGEP(base->getType()->getPointerElementType(), base, {ZERO, ONE});
-            // Load ptr to array
-            base = B->CreateLoad(ptrToArr->getType()->getPointerElementType(), ptrToArr);
-            // Get ptr to index of array
-            base = B->CreateGEP(base->getType()->getPointerElementType(), base,
-                                {ZERO, dimIndex});
-        }
-        base = B->CreateLoad(base->getType()->getPointerElementType(), base);
-        Return(base);
-    }
-
-    void visitEDim(bnfc::EDim* p) {
-        if (auto dimExp =
-                dynamic_cast<bnfc::ExpDimen*>(p->expdim_)) { // Size explicitly stated
-            ExpBuilder expBuilder(parent_);
-            Value* dimValue = expBuilder.Visit(dimExp->expr_);
-            indices_.push_front(dimValue);
-        } else { // Size implicitly 0
-            indices_.push_front(ZERO);
-        }
-        Visit(p->expr_);
-    }
-
-    void visitEArrNew(bnfc::EArrNew* p) {
-        auto arrayType = ArrayType::get(INT32_TY, indices_.size());
-        std::size_t N = indices_.size();
-        Constant* typeSize = INT32(getTypeSize(p->type_, parent_));
-
-        Value* dimList = B->CreateAlloca(arrayType);
-        int i = 0;
-        // Fill an array with the dimension lengths
-        for (auto size : indices_) {
-            Value* gep = B->CreateGEP(arrayType, dimList, {ZERO, INT32(i++)});
-            B->CreateStore(size, gep);
-        }
-
-        // Cast from array to ptr before passing to multiArray function
-        dimList = B->CreatePointerCast(dimList, parent_.intPtrTy);
-
-        Value* callNew =
-            B->CreateCall(ENV->findFn("multiArray"), {INT32(N), typeSize, dimList});
-
-        callNew = B->CreatePointerCast(
-            callNew, parent_.getMultiArrPtrTy(N, getLlvmType(p->type_, parent_)));
-
-        Return(callNew);
-    }
-
-    void visitEVar(bnfc::EVar* p) {
-        Value* array = ENV->findVar(p->ident_);
-        Return(indexArray(array));
-    }
-
-    void visitEApp(bnfc::EApp* p) {
-        ExpBuilder expBuilder(parent_);
-        Value* retVal = expBuilder.Visit(p);
-        Return(indexArray(retVal));
-    }
-};
 
 void ExpBuilder::visitELitDoub(bnfc::ELitDoub* p) { Return(DOUBLE(p->double_)); }
 void ExpBuilder::visitELitInt(bnfc::ELitInt* p) { Return(INT32(p->integer_)); }
@@ -191,16 +121,61 @@ void ExpBuilder::visitEOr(bnfc::EOr* p) {
     result = B->CreateLoad(INT1_TY, result);
     Return(result);
 }
-void ExpBuilder::visitEDim(bnfc::EDim* p) {
-    ArrayBuilder arrayBuilder(parent_);
-    Return(arrayBuilder.Visit(p));
+void ExpBuilder::visitEIndex(bnfc::EIndex* p) {
+    IndexBuilder indexBuilder(parent_);
+    Value* load = B->CreateLoad(indexBuilder.Visit(p));
+    Return(load);
 }
 void ExpBuilder::visitEArrLen(bnfc::EArrLen* p) {
+    BasicBlock* hasLengthB = parent_.newBasicBlock();
+    BasicBlock* contB = parent_.newBasicBlock();
+    Value* temp = B->CreateAlloca(INT32_TY);
+    B->CreateStore(ZERO, temp); // Store 0 by default (0 length)
     Value* array = Visit(p->expr_);
     array = B->CreatePointerCast(array, ARR_STRUCT_TY);
+    Value* ptrDiff = B->CreatePtrDiff(
+        array, ConstantPointerNull::get((PointerType*)ARR_STRUCT_TY)); // zero if null
+    Value* cond = B->CreateICmpNE(ptrDiff, ConstantInt::get(INT64_TY, 0));
+    B->CreateCondBr(cond, hasLengthB, contB);
+    B->SetInsertPoint(hasLengthB);
     Value* len =
         B->CreateGEP(ARR_STRUCT_TY->getPointerElementType(), array, {ZERO, ZERO});
-    Return(B->CreateLoad(INT32_TY, len));
+    len = B->CreateLoad(INT32_TY, len);
+    B->CreateStore(len, temp);
+    B->CreateBr(contB);
+    B->SetInsertPoint(contB);
+    Return(B->CreateLoad(INT32_TY, temp));
+}
+
+void ExpBuilder::visitEArrNew(bnfc::EArrNew* p) {
+    std::size_t N = p->listexpdim_->size();
+    auto arrayType = ArrayType::get(INT32_TY, N);
+    Constant* typeSize = INT32(getTypeSize(p->type_, parent_));
+    Value* dimList = B->CreateAlloca(arrayType);
+
+    int i = 0;
+    // Fill an array with the dimension lengths
+    for (auto dim : *p->listexpdim_) {
+        Value* gep = B->CreateGEP(arrayType, dimList, {ZERO, INT32(i++)});
+        Value* size = nullptr;
+        if (auto expDim = dynamic_cast<bnfc::ExpDimen*>(dim)) { // Explicit index
+            size = Visit(expDim->expr_);
+        } else { // Implicit zero
+            size = ZERO;
+        }
+        B->CreateStore(size, gep);
+    }
+
+    // Cast from array to ptr before passing to multiArray function
+    dimList = B->CreatePointerCast(dimList, parent_.intPtrTy);
+
+    Value* callNew =
+        B->CreateCall(ENV->findFn("multiArray"), {INT32(N), typeSize, dimList});
+
+    callNew = B->CreatePointerCast(
+        callNew, parent_.getMultiArrPtrTy(N, getLlvmType(p->type_, parent_)));
+
+    Return(callNew);
 }
 
 } // namespace jlc::codegen

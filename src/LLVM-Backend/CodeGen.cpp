@@ -9,6 +9,7 @@ Codegen::Codegen(const std::string& moduleName) {
     builder_ = std::make_unique<IRBuilder<>>(*context_);
     module_ = std::make_unique<Module>(moduleName, *context_);
 
+    int64 = Type::getInt64Ty(*context_);
     int32 = Type::getInt32Ty(*context_);
     int8 = Type::getInt8Ty(*context_);
     int1 = Type::getInt1Ty(*context_);

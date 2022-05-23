@@ -25,6 +25,7 @@ auto GetPtrTy(Args&&... args)
 #define INT32(X) ConstantInt::get(parent_.int32, X)
 #define DOUBLE(X) ConstantFP::get(parent_.doubleTy, X)
 #define INT32_TY parent_.int32
+#define INT64_TY parent_.int64
 #define DOUBLE_TY parent_.doubleTy
 #define INT1_TY parent_.int1
 #define ARR_STRUCT_TY parent_.arrayStructTy
@@ -46,7 +47,7 @@ class Codegen {
     friend class DefaultValue;
     friend class BinOpBuilder;
     friend class ExpBuilder;
-    friend class ArrayBuilder;
+    friend class IndexBuilder;
     friend class AssignmentBuilder;
 
     BasicBlock* newBasicBlock();
@@ -62,6 +63,7 @@ class Codegen {
     std::unique_ptr<LLVMContext> context_;
     std::unique_ptr<Module> module_;
 
+    Type* int64;
     Type* int32;
     Type* int8;
     Type* int1;

@@ -1,5 +1,6 @@
 #include "ProgramBuilder.h"
 #include "ExpBuilder.h"
+#include "IndexBuilder.h"
 
 namespace jlc::codegen {
 
@@ -60,8 +61,6 @@ class FunctionAdder : public VoidVisitor {
 class AssignmentBuilder : public VoidVisitor {
   public:
     Codegen& parent_;
-    std::list<Value*> indices_{};
-    bool indexing = false;
     Value* whereToAssign = nullptr;
 
     AssignmentBuilder(Codegen& parent) : parent_(parent) {}
@@ -75,39 +74,14 @@ class AssignmentBuilder : public VoidVisitor {
 
     void visitETyped(bnfc::ETyped* p) { Visit(p->expr_); }
 
-    void visitEDim(bnfc::EDim* p) {
-        indexing = true;
-        if (auto dimExp = dynamic_cast<bnfc::ExpDimen*>(p->expdim_)) { // Size explicitly stated
-            ExpBuilder expBuilder(parent_);
-            Value* dimValue = expBuilder.Visit(dimExp->expr_);
-            indices_.push_front(dimValue);
-        } else { // Size implicitly 0
-            indices_.push_front(ZERO);
-        }
-        Visit(p->expr_);
-    }
-
-    Value* indexArray(Value* base) {
-        for (auto dimIndex : indices_) {
-            base = B->CreateLoad(base); // ptr* to multiArray struct
-            // Get ptr to array
-            Value* ptrToArr =
-                B->CreateGEP(base->getType()->getPointerElementType(), base, {ZERO, ONE});
-            // Load ptr to array
-            base = B->CreateLoad(ptrToArr->getType()->getPointerElementType(), ptrToArr);
-            Type* t = base->getType()->getPointerElementType();
-            // Get ptr to index of array
-            base = B->CreateGEP(t, base, {ZERO, dimIndex});
-        }
-        return base;
+    void visitEIndex(bnfc::EIndex* p) {
+        IndexBuilder indexBuilder(parent_);
+        whereToAssign = indexBuilder.Visit(p);
     }
 
     // Variable
     void visitEVar(bnfc::EVar* p) {
         whereToAssign = ENV->findVar(p->ident_);
-
-        if (indexing)
-            whereToAssign = indexArray(whereToAssign);
     }
 };
 

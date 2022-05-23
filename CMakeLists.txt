@@ -23,21 +23,23 @@ set(bnfc_SOURCE
 )
 
 set(jlc-lib_SOURCE ${bnfc_SOURCE}
-        #src/Common/BaseVisitor.cpp
-        #src/Common/BaseVisitor.h
-        #src/Frontend/TypeChecker.cpp
-        #src/Frontend/TypeChecker.h
-        #src/Frontend/TypeError.h
-        #src/LLVM-Backend/CodeGen.h
-        #src/LLVM-Backend/CodeGen.cpp
-        #src/LLVM-Backend/BinOpBuilder.cpp
-        #src/LLVM-Backend/BinOpBuilder.h
-        #src/LLVM-Backend/CodegenEnv.cpp
-        #src/LLVM-Backend/CodegenEnv.h
-        #src/LLVM-Backend/ExpBuilder.cpp
-        #src/LLVM-Backend/ExpBuilder.h
-        #src/LLVM-Backend/ProgramBuilder.cpp
-        #src/LLVM-Backend/ProgramBuilder.h
+        src/Common/BaseVisitor.cpp
+        src/Common/BaseVisitor.h
+        src/Frontend/TypeChecker.cpp
+        src/Frontend/TypeChecker.h
+        src/Frontend/TypeError.h
+        src/LLVM-Backend/CodeGen.h
+        src/LLVM-Backend/CodeGen.cpp
+        src/LLVM-Backend/BinOpBuilder.cpp
+        src/LLVM-Backend/BinOpBuilder.h
+        src/LLVM-Backend/CodegenEnv.cpp
+        src/LLVM-Backend/CodegenEnv.h
+        src/LLVM-Backend/ExpBuilder.cpp
+        src/LLVM-Backend/ExpBuilder.h
+        src/LLVM-Backend/ProgramBuilder.cpp
+        src/LLVM-Backend/ProgramBuilder.h
+        src/LLVM-Backend/IndexBuilder.h
+        src/LLVM-Backend/IndexBuilder.cpp
         src/Common/Util.h
         src/Frontend/Parser.h)
 

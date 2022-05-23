@@ -7,7 +7,7 @@ namespace jlc::codegen {
 
 // Returns a llvm::Value* representation of the expression
 // A call to ExpBuilder effectively builds the expression in the resulting IR.
-class ExpBuilder : public ValueVisitor<llvm::Value*> {
+class ExpBuilder : public ValueVisitor<Value*> {
   public:
     ExpBuilder(Codegen& parent) : parent_(parent) {}
 
@@ -26,12 +26,13 @@ class ExpBuilder : public ValueVisitor<llvm::Value*> {
     void visitEAdd(bnfc::EAdd* p) override;
     void visitEAnd(bnfc::EAnd* p) override;
     void visitEOr(bnfc::EOr* p) override;
-    void visitEDim(bnfc::EDim* p) override;
+    void visitEIndex(bnfc::EIndex* p) override;
     void visitEArrLen(bnfc::EArrLen* p) override;
+    void visitEArrNew(bnfc::EArrNew* p) override;
 
   private:
     Codegen& parent_;
-    llvm::Type* exprType_;
+    Type* exprType_;
 };
 
 } // namespace jlc::codegen

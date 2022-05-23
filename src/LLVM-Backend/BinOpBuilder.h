@@ -11,19 +11,19 @@ namespace jlc::codegen {
 class BinOpBuilder
     : public ValueVisitor<llvm::Value*> {
   public:
-    BinOpBuilder(Codegen& parent, Expr* e1, Expr* e2);
+    BinOpBuilder(Codegen& parent, bnfc::Expr* e1, bnfc::Expr* e2);
 
-    void visitEQU(EQU* p) override;
-    void visitNE(NE* p) override;
-    void visitGE(GE* p) override;
-    void visitLTH(LTH* p) override;
-    void visitLE(LE* p) override;
-    void visitGTH(GTH* p) override;
-    void visitPlus(Plus* p) override;
-    void visitMinus(Minus* p) override;
-    void visitTimes(Times* p) override;
-    void visitDiv(Div* p) override;
-    void visitMod(Mod* p) override;
+    void visitEQU(bnfc::EQU* p) override;
+    void visitNE(bnfc::NE* p) override;
+    void visitGE(bnfc::GE* p) override;
+    void visitLTH(bnfc::LTH* p) override;
+    void visitLE(bnfc::LE* p) override;
+    void visitGTH(bnfc::GTH* p) override;
+    void visitPlus(bnfc::Plus* p) override;
+    void visitMinus(bnfc::Minus* p) override;
+    void visitTimes(bnfc::Times* p) override;
+    void visitDiv(bnfc::Div* p) override;
+    void visitMod(bnfc::Mod* p) override;
 
   private:
     Codegen& parent_;

@@ -1,21 +1,12 @@
 
 #include "BaseVisitor.h"
+#include "Util.h"
 #include <iostream>
 
-#ifndef NDEBUG
-#define JLC_ASSERT(condition, message)                                                   \
-    do {                                                                                 \
-        if (!(condition)) {                                                              \
-            std::cerr << "Assertion `" #condition "` failed in " << __FILE__ << " line " \
-                      << __LINE__ << ": " << message << std::endl;                       \
-            std::terminate();                                                            \
-        }                                                                                \
-    } while (false)
-#else
-#define JLC_ASSERT(condition, message)
-#endif
-
 namespace jlc {
+
+using namespace bnfc;
+
 void BaseVisitor::visitProg(Prog* t) {}     // abstract class
 void BaseVisitor::visitTopDef(TopDef* t) {} // abstract class
 void BaseVisitor::visitArg(Arg* t) {}       // abstract class
@@ -268,6 +259,44 @@ void BaseVisitor::visitString(String x) {
 }
 
 void BaseVisitor::visitIdent(Ident x) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitFor(For* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitArr(Arr* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitEArrLen(EArrLen* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitEArrNew(EArrNew* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+
+void BaseVisitor::visitDimension(Dimension* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitListDim(ListDim* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitDim(Dim* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitEIndex(EIndex* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitExpDimen(ExpDimen* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+
+void BaseVisitor::visitExpDimenEmpty(ExpDimenEmpty* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitExpDim(ExpDim* p) {
+    JLC_ASSERT(false, "Visitor function not implemented!");
+}
+void BaseVisitor::visitListExpDim(bnfc::ListExpDim* p) {
     JLC_ASSERT(false, "Visitor function not implemented!");
 }
 

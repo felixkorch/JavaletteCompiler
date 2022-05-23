@@ -1,9 +1,9 @@
 #include "src/Common/Util.h"
 #include "src/Frontend/Parser.h"
+#include "bnfc/Printer.H"
 #include <iostream>
 
 using namespace jlc;
-using namespace jlc::typechecker;
 namespace fs = std::filesystem;
 
 int main(int argc, char** argv) {
@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
 
     try {
         input = readFileOrInput(argv[1]);
-    } catch (std::exception& e) {
+    } catch(std::exception& e) {
         std::cerr << "ERROR: Failed to read source file" << std::endl;
     }
     Parser parser;
@@ -21,29 +21,24 @@ int main(int argc, char** argv) {
     } catch (bnfc::parse_error& e) {
         std::cerr << "ERROR: Parse error on line " << e.getLine() << std::endl;
         return 1;
-    } catch (std::exception& e) {
+    } catch(std::exception& e) {
         return 1;
     }
 
-    auto printer = std::make_unique<bnfc::PrintAbsyn>();
+    /*
+
+    TypeChecker typeChecker;
 
     try {
-        // Print program before typechecking
-        std::cout << printer->print(parser.getAST()) << std::endl;
-
-        TypeChecker typeChecker;
         typeChecker.run(parser.getAST());
-
-        // Print program after typechecking
-        std::cout << printer->print(typeChecker.getAbsyn()) << std::endl;
-
-    } catch (jlc::typechecker::TypeError& e) {
-        std::cerr << e.what() << "\n";
+    } catch(TypeError& t) {
+        std::cerr << t.what() << std::endl;
         return 1;
-    } catch (std::exception& e) {
-        std::cerr << e.what() << "\n";
-        return 1;
-    }
+    } */
+
+    //auto printer = std::make_unique<bnfc::PrintAbsyn>();
+    //printer->print(parser.getAST());
+
     std::cerr << "OK" << std::endl;
     return 0;
 }

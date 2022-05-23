@@ -1,5 +1,4 @@
 #pragma once
-#include "TypeChecker.h"
 #include "bnfc/Absyn.H"
 #include "bnfc/Parser.H"
 #include "bnfc/ParserError.H"

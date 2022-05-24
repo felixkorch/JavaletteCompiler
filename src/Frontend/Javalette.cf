@@ -82,7 +82,7 @@ separator nonempty Dim "";
 -- EArrLen can only be Expr7 and above(EArrNew , EApp, EVar, EIndex), since the can return an array.
 
 ExpDimen.       ExpDim ::= "[" Expr "]" ;
-ExpDimenEmpty.  ExpDim ::= Dim ;
+--ExpDimenEmpty.  ExpDim ::= Dim ;
 
 EIndex.     Expr8 ::= Expr8 ExpDim ;
 
@@ -90,7 +90,7 @@ EVar.       Expr8 ::= Ident ;
 
 EApp.       Expr8 ::= Ident "(" [Expr] ")" ;
 
-EArrNew.    Expr7 ::= "new" Type1 [ExpDim] ;
+EArrNew.    Expr7 ::= "new" Type [ExpDim] ;
 
 EArrLen.    Expr6 ::= Expr7 "." Ident ;
 

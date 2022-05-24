@@ -29,6 +29,7 @@ class ExpBuilder : public ValueVisitor<Value*> {
     void visitEIndex(bnfc::EIndex* p) override;
     void visitEArrLen(bnfc::EArrLen* p) override;
     void visitEArrNew(bnfc::EArrNew* p) override;
+    void visitExpDimen(bnfc::ExpDimen* p) override;
 
   private:
     Codegen& parent_;

@@ -81,7 +81,6 @@ class BaseVisitor : public bnfc::Visitor {
     void visitListDim(bnfc::ListDim *p);
     void visitListExpr(bnfc::ListExpr *p);
     void visitExpDimen(bnfc::ExpDimen *p);
-    void visitExpDimenEmpty(bnfc::ExpDimenEmpty *p);
     void visitExpDim(bnfc::ExpDim *p);
     void visitListExpDim(bnfc::ListExpDim *p);
 

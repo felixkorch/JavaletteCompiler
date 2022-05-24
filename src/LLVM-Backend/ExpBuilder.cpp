@@ -148,22 +148,26 @@ void ExpBuilder::visitEArrLen(bnfc::EArrLen* p) {
 }
 
 void ExpBuilder::visitEArrNew(bnfc::EArrNew* p) {
-    std::size_t N = p->listexpdim_->size();
+    auto arrTy = dynamic_cast<bnfc::Arr*>(p->type_);
+    auto N = p->listexpdim_->size() + (arrTy ? arrTy->listdim_->size() : 0);
     auto arrayType = ArrayType::get(INT32_TY, N);
-    Constant* typeSize = INT32(getTypeSize(p->type_, parent_));
+    Constant* typeSize = INT32(getTypeSize(arrTy ? arrTy->type_ : p->type_, parent_));
     Value* dimList = B->CreateAlloca(arrayType);
 
     int i = 0;
-    // Fill an array with the dimension lengths
+    // Fill an array with the dimension sizes
     for (auto dim : *p->listexpdim_) {
         Value* gep = B->CreateGEP(arrayType, dimList, {ZERO, INT32(i++)});
-        Value* size = nullptr;
-        if (auto expDim = dynamic_cast<bnfc::ExpDimen*>(dim)) { // Explicit index
-            size = Visit(expDim->expr_);
-        } else { // Implicit zero
-            size = ZERO;
-        }
+        Value* size = Visit(dim);
         B->CreateStore(size, gep);
+    }
+
+    // Add zeros to the non-initialized dimensions
+    if (arrTy) {
+        for (auto _ : *arrTy->listdim_) {
+            Value* gep = B->CreateGEP(arrayType, dimList, {ZERO, INT32(i++)});
+            B->CreateStore(ZERO, gep);
+        }
     }
 
     // Cast from array to ptr before passing to multiArray function
@@ -173,9 +177,11 @@ void ExpBuilder::visitEArrNew(bnfc::EArrNew* p) {
         B->CreateCall(ENV->findFn("multiArray"), {INT32(N), typeSize, dimList});
 
     callNew = B->CreatePointerCast(
-        callNew, parent_.getMultiArrPtrTy(N, getLlvmType(p->type_, parent_)));
+        callNew, parent_.getMultiArrPtrTy(
+                     N, getLlvmType(arrTy ? arrTy->type_ : p->type_, parent_)));
 
     Return(callNew);
 }
+void ExpBuilder::visitExpDimen(bnfc::ExpDimen* p) { Return(Visit(p->expr_)); }
 
 } // namespace jlc::codegen

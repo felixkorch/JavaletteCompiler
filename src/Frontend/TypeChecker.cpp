@@ -516,8 +516,8 @@ void IndexChecker::visitEIndex(EIndex* p) {
 void IndexChecker::visitEArrNew(EArrNew* p) {
     lhsDim_ = p->listexpdim_->size();
     baseType_ = p->type_;
-    for (ExpDim* dim : *p->listexpdim_) // Check each index is int
-        checkDimIsInt(dim, env_);
+    for (ExpDim* expDim : *p->listexpdim_) // Check each index is int
+        checkDimIsInt(expDim, env_);
 
     if (rhsDim_ > lhsDim_) { // Check depth (exp vs type)
         throw TypeError("Invalid depth when indexing array", p->line_number,
@@ -561,11 +561,19 @@ void TypeInferrer::visitEIndex(EIndex* p) {
     Return(indexChecker.Visit(p));
 }
 void TypeInferrer::visitEArrNew(EArrNew* p) {
-    for (ExpDim* dim : *p->listexpdim_) // Check each index is int
-        checkDimIsInt(dim, env_);
+    Type* baseType = p->type_;
+    int dim = 0;
+    if(auto arr = dynamic_cast<Arr*>(baseType)) {
+        baseType = arr->type_;
+        dim += arr->listdim_->size();
+    }
+    for (ExpDim* dimExp : *p->listexpdim_) { // Check each index is int
+        checkDimIsInt(dimExp, env_);
+        dim++;
+    }
 
-    ListDim* listDim = newArrayWithNDimensions(p->listexpdim_->size());
-    Return(new ETyped(p, new Arr(p->type_, listDim)));
+    ListDim* listDim = newArrayWithNDimensions(dim);
+    Return(new ETyped(p, new Arr(baseType, listDim)));
 }
 
 /********************   Env class    ********************/

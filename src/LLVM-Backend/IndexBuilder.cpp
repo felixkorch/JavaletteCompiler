@@ -26,14 +26,9 @@ Value* IndexBuilder::indexArray(Value* base) {
 }
 
 void IndexBuilder::visitEIndex(bnfc::EIndex* p) {
-    if (auto dimExp =
-            dynamic_cast<bnfc::ExpDimen*>(p->expdim_)) { // Size explicitly stated
-        ExpBuilder expBuilder(parent_);
-        Value* dimValue = expBuilder.Visit(dimExp->expr_);
-        indices_.push_front(dimValue);
-    } else { // Size implicitly 0
-        indices_.push_front(ZERO);
-    }
+    ExpBuilder expBuilder(parent_);
+    Value* dimValue = expBuilder.Visit(p->expdim_);
+    indices_.push_front(dimValue);
     Visit(p->expr_);
 }
 

@@ -1,15 +1,17 @@
 #pragma once
+#include "TypeCheckerEnv.h"
 #include "TypeError.h"
+#include "src/Common/BaseVisitor.h"
+
 #include "bnfc/Absyn.H"
 #include "bnfc/Printer.H"
-#include "src/Common/BaseVisitor.h"
+
 #include <algorithm>
 #include <list>
 #include <memory>
 #include <unordered_map>
 
 namespace jlc::typechecker {
-
 using namespace bnfc;
 
 enum class TypeCode { INT, DOUBLE, BOOLEAN, VOID, STRING, ARRAY, ERROR };
@@ -20,59 +22,18 @@ enum class OpCode {
     GTH,
     GE,
     EQU,
-    NE, // RelOP
+    NE,
     PLUS,
-    MINUS, // AddOP
+    MINUS,
     TIMES,
     DIV,
-    MOD, // MulOP
+    MOD,
     AND,
     OR,
     NOT,
-    NEG // Other
+    NEG
 };
 
-struct FunctionType {
-    std::list<Type*> args;
-    Type* ret;
-};
-
-struct Signature {
-    std::string name;
-    FunctionType type;
-};
-
-class Env {
-    using Scope = std::unordered_map<std::string, Type*>; // Map of (Var -> Type)
-    // Defines the environment of the program
-    std::list<Scope> scopes_;
-    std::unordered_map<std::string, FunctionType> signatures_;
-    Signature currentFn_;
-    bool enteredFor_;
-
-  public:
-    Env() : scopes_(), signatures_(), currentFn_(), enteredFor_(false) {}
-
-    void enterScope();
-    void exitScope();
-    void enterFn(const std::string& fnName);
-    Signature& getCurrentFunction();
-    void enterFor();
-    void exitFor();
-    bool isForBlock() const { return enteredFor_; }
-
-    // In the future: could enter scope in constructor to allow global vars
-
-    // Called in the first pass of the type-checker
-    void addSignature(const std::string& fnName, const FunctionType& t);
-
-    // Called when it's used in an expression, throws if the variable doesn't exist.
-    Type* findVar(const std::string& var, int lineNr, int charNr);
-    // Called when a function call is invoked, throws if the function doesn't exist.
-    FunctionType& findFn(const std::string& fn, int lineNr, int charNr);
-    // Adds a variable to the current scope, throws if it already exists.
-    void addVar(const std::string& name, Type* t);
-};
 
 std::string toString(TypeCode t);
 std::string toString(ETyped* p);
@@ -113,40 +74,6 @@ class TypeCoder : public ValueVisitor<TypeCode> {
     void visitArr(Arr* p) override { Return(TypeCode::ARRAY); }
 };
 
-// Returns an annotated version of the expression and
-// checks the compatability between operands and supported types for operators.
-class TypeInferrer : public ValueVisitor<ETyped*> {
-    Env& env_;
-
-    static bool typeIn(TypeCode t, std::initializer_list<TypeCode> list);
-    auto checkBinExp(Expr* e1, Expr* e2, const std::string& op,
-                     std::initializer_list<TypeCode> allowedTypes);
-    auto checkUnExp(Expr* e, const std::string& op,
-                    std::initializer_list<TypeCode> allowedTypes);
-
-  public:
-    explicit TypeInferrer(Env& env) : env_(env) {}
-
-    void visitELitInt(ELitInt* p) override;
-    void visitELitDoub(ELitDoub* p) override;
-    void visitELitFalse(ELitFalse* p) override;
-    void visitELitTrue(ELitTrue* p) override;
-    void visitEVar(EVar* p) override;
-    void visitListItem(ListItem* p) override;
-    void visitEAdd(EAdd* p) override;
-    void visitEMul(EMul* p) override;
-    void visitEOr(EOr* p) override;
-    void visitEAnd(EAnd* p) override;
-    void visitNot(Not* p) override;
-    void visitNeg(Neg* p) override;
-    void visitERel(ERel* p) override;
-    void visitEApp(EApp* p) override;
-    void visitEString(EString* p) override;
-    void visitEArrLen(EArrLen* p) override;
-    void visitEIndex(EIndex* p) override;
-    void visitEArrNew(EArrNew* p) override;
-};
-
 // Handles the type-checking for declarations, needed because the "children"
 // i.e. Init/NoInit, needs access to the type variable
 class DeclHandler : public VoidVisitor {
@@ -159,31 +86,6 @@ class DeclHandler : public VoidVisitor {
     void visitListItem(ListItem* p) override;
     void visitInit(Init* p) override;
     void visitNoInit(NoInit* p) override;
-};
-
-// Checks a sequence of statements
-class StatementChecker : public VoidVisitor {
-    Env& env_;
-    Signature currentFn_;
-
-  public:
-    explicit StatementChecker(Env& env) : env_(env) {}
-
-    void visitBStmt(BStmt* p) override;
-    void visitDecr(Decr* p) override;
-    void visitIncr(Incr* p) override;
-    void visitCond(Cond* p) override;
-    void visitCondElse(CondElse* p) override;
-    void visitWhile(While* p) override;
-    void visitFor(For* p) override;
-    void visitBlock(Block* p) override;
-    void visitDecl(Decl* p) override;
-    void visitListStmt(ListStmt* p) override;
-    void visitAss(Ass* p) override;
-    void visitRet(Ret* p) override;
-    void visitVRet(VRet* p) override;
-    void visitSExp(SExp* p) override;
-    void visitEmpty(Empty* p) override;
 };
 
 // Checks that the function returns a value (for non-void). True if OK.
@@ -211,7 +113,6 @@ class ReturnChecker : public ValueVisitor<bool> {
     void visitEIndex(EIndex* p) override;
 };
 
-// Checks that the function returns a value (for non-void). True if OK.
 class IndexChecker : public ValueVisitor<ETyped*> {
     Env& env_;
     std::size_t rhsDim_; // Number of dimensions of expression

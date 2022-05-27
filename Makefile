@@ -1,4 +1,4 @@
-MAKEFLAGS := --jobs=$(shell nproc)
+#MAKEFLAGS := --jobs=$(shell nproc)
 OBJ_DIR = build
 ALL_OBJ_DIRS = build build/Frontend build/LLVM-Backend build/X86-Backend build/Common
 SRC_DIR = src

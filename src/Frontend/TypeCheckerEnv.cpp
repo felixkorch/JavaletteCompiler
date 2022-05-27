@@ -21,15 +21,15 @@ void Env::addSignature(const std::string& fnName, const FunctionType& t) {
 Type* Env::findVar(const std::string& var, int lineNr, int charNr) {
     for (auto& scope : scopes_) {
         if (auto type = map::getValue(var, scope))
-            return type->get();
+            return *type;
     }
     throw TypeError("Variable '" + var + "' not declared in this context", lineNr,
                     charNr);
 }
 
-FunctionType& Env::findFn(const std::string& fn, int lineNr, int charNr) {
+FunctionType Env::findFn(const std::string& fn, int lineNr, int charNr) {
     if (auto fnType = map::getValue(fn, signatures_))
-        return fnType->get();
+        return *fnType;
     throw TypeError("Function '" + fn + "' does not exist", lineNr, charNr);
 }
 

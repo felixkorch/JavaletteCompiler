@@ -40,7 +40,7 @@ class Env {
     // Called when it's used in an expression, throws if the variable doesn't exist.
     Type* findVar(const std::string& var, int lineNr, int charNr);
     // Called when a function call is invoked, throws if the function doesn't exist.
-    FunctionType& findFn(const std::string& fn, int lineNr, int charNr);
+    FunctionType findFn(const std::string& fn, int lineNr, int charNr);
     // Adds a variable to the current scope, throws if it already exists.
     void addVar(const std::string& name, Type* t);
 };

@@ -35,7 +35,7 @@ template <class Key, class Val>
 inline auto getValue(const Key& key, std::unordered_map<Key, Val>& map) {
     auto search = map.find(key);
     bool success = search != map.end();
-    return success ? std::optional<std::reference_wrapper<Val>>{search->second}
+    return success ? std::optional<Val>{search->second}
                    : std::nullopt;
 }
 }

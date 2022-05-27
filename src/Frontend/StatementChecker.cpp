@@ -172,4 +172,69 @@ void StatementChecker::visitEmpty(Empty* p) {
     // if (false); or just ;
 }
 
+/********************   DeclHandler class    ********************/
+
+void DeclHandler::visitDecl(Decl* p) {
+    LHSType = p->type_;
+    Visit(p->listitem_);
 }
+
+void DeclHandler::visitListItem(ListItem* p) {
+    for (Item* it : *p)
+        Visit(it);
+}
+
+void DeclHandler::visitInit(Init* p) {
+    env_.addVar(p->ident_, LHSType);
+    ETyped* RHSExpr = infer(p->expr_, env_);
+
+    if (!typesEqual(LHSType, RHSExpr->type_)) {
+        throw TypeError("expected type is " + toString(typecode(LHSType)) + ", but got " +
+                            toString(RHSExpr),
+                        p->expr_->line_number, p->expr_->char_number);
+    }
+    p->expr_ = RHSExpr;
+}
+
+void DeclHandler::visitNoInit(NoInit* p) { env_.addVar(p->ident_, LHSType); }
+
+/********************   ReturnChecker class    ********************/
+// Returns true if:
+// 1. Current level returns a value.
+// 2. There is an if-else and both branches return a value.
+//
+// Notes: * if-statement ignored because it's not enough if it returns, so it becomes
+// irrelevant
+//        * the control-flow will always pass through either if/else so if both returns,
+//        then it's OK.
+
+void ReturnChecker::visitDecr(Decr* p) {}
+void ReturnChecker::visitIncr(Incr* p) {}
+void ReturnChecker::visitWhile(While* p) {}
+void ReturnChecker::visitFor(For* p) {}
+void ReturnChecker::visitDecl(Decl* p) {}
+void ReturnChecker::visitAss(Ass* p) {}
+void ReturnChecker::visitVRet(VRet* p) {}
+void ReturnChecker::visitSExp(SExp* p) {}
+void ReturnChecker::visitEmpty(Empty* p) {}
+void ReturnChecker::visitCond(Cond* p) {}
+void ReturnChecker::visitEIndex(EIndex* p) {}
+
+void ReturnChecker::visitBStmt(BStmt* p) { Visit(p->blk_); }
+void ReturnChecker::visitRet(Ret* p) { Return(true); }
+void ReturnChecker::visitBlock(Block* p) {
+    for (Stmt* stmt : *p->liststmt_)
+        Visit(stmt);
+}
+void ReturnChecker::visitListStmt(ListStmt* p) {
+    for (auto stmt : *p)
+        Visit(stmt);
+}
+void ReturnChecker::visitCondElse(CondElse* p) {
+    ReturnChecker checkIf(env_);
+    ReturnChecker checkElse(env_);
+    if (checkIf.Visit(p->stmt_1) && checkElse.Visit(p->stmt_2))
+        Return(true);
+}
+
+} // namespace jlc::typechecker

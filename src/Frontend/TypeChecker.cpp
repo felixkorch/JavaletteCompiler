@@ -1,6 +1,8 @@
-#include "TypeChecker.h"
-#include "TypeError.h"
-#include "src/Common/Util.h"
+#include "Frontend/TypeChecker.h"
+#include "Frontend/TypeError.h"
+#include "Frontend/StatementChecker.h"
+#include "Frontend/TypeInferrer.h"
+#include "Common/Util.h"
 namespace jlc::typechecker {
 
 /********************   ProgramChecker class   ********************/
@@ -61,76 +63,8 @@ void FunctionChecker::visitArgument(Argument* p) {
     env_.addVar(p->ident_, p->type_);
 }
 
-/********************   ReturnChecker class    ********************/
-// Returns true if:
-// 1. Current level returns a value.
-// 2. There is an if-else and both branches return a value.
-//
-// Notes: * if-statement ignored because it's not enough if it returns, so it becomes
-// irrelevant
-//        * the control-flow will always pass through either if/else so if both returns,
-//        then it's OK.
 
-void ReturnChecker::visitDecr(Decr* p) {}
-void ReturnChecker::visitIncr(Incr* p) {}
-void ReturnChecker::visitWhile(While* p) {}
-void ReturnChecker::visitFor(For* p) {}
-void ReturnChecker::visitDecl(Decl* p) {}
-void ReturnChecker::visitAss(Ass* p) {}
-void ReturnChecker::visitVRet(VRet* p) {}
-void ReturnChecker::visitSExp(SExp* p) {}
-void ReturnChecker::visitEmpty(Empty* p) {}
-void ReturnChecker::visitCond(Cond* p) {}
-void ReturnChecker::visitEIndex(EIndex* p) {}
-
-void ReturnChecker::visitBStmt(BStmt* p) { Visit(p->blk_); }
-void ReturnChecker::visitRet(Ret* p) { Return(true); }
-void ReturnChecker::visitBlock(Block* p) {
-    for (Stmt* stmt : *p->liststmt_)
-        Visit(stmt);
-}
-void ReturnChecker::visitListStmt(ListStmt* p) {
-    for (auto stmt : *p)
-        Visit(stmt);
-}
-void ReturnChecker::visitCondElse(CondElse* p) {
-    ReturnChecker checkIf(env_);
-    ReturnChecker checkElse(env_);
-    if (checkIf.Visit(p->stmt_1) && checkElse.Visit(p->stmt_2))
-        Return(true);
-}
-
-/********************   DeclHandler class    ********************/
-
-void DeclHandler::visitDecl(Decl* p) {
-    LHSType = p->type_;
-    Visit(p->listitem_);
-}
-
-void DeclHandler::visitListItem(ListItem* p) {
-    for (Item* it : *p)
-        Visit(it);
-}
-
-void DeclHandler::visitInit(Init* p) {
-    env_.addVar(p->ident_, LHSType);
-    ETyped* RHSExpr = infer(p->expr_, env_);
-
-    if (!typesEqual(LHSType, RHSExpr->type_)) {
-        throw TypeError("expected type is " + toString(typecode(LHSType)) + ", but got " +
-                            toString(RHSExpr),
-                        p->expr_->line_number, p->expr_->char_number);
-    }
-    p->expr_ = RHSExpr;
-}
-
-void DeclHandler::visitNoInit(NoInit* p) { env_.addVar(p->ident_, LHSType); }
-
-// "EIndex" Base can be:
-//
-//  arr[2][3]    EVar
-//  (new int[4]) EArrNew
-//  getArr()[2]  EApp
+/********************   Helper functions    ********************/
 
 void checkDimIsInt(ExpDim* p, Env& env) {
     if (auto expDim = dynamic_cast<ExpDimen*>(p)) { // Index explicitly stated
@@ -143,68 +77,6 @@ void checkDimIsInt(ExpDim* p, Env& env) {
     }
 }
 
-Type* IndexChecker::getTypeOfIndexExpr(std::size_t lhsDim, std::size_t rhsDim,
-                                       Type* baseType) {
-    if (rhsDim == lhsDim)
-        return baseType;
-    ListDim* listDim = newArrayWithNDimensions(lhsDim - rhsDim);
-    return new Arr(baseType, listDim);
-}
-
-void IndexChecker::visitEIndex(EIndex* p) {
-    rhsDim_++; // +1 dimensions
-    checkDimIsInt(p->expdim_, env_);
-    Visit(p->expr_);
-    Type* indexExprType = getTypeOfIndexExpr(lhsDim_, rhsDim_, baseType_);
-    Return(new ETyped(p, indexExprType));
-}
-
-void IndexChecker::visitEArrNew(EArrNew* p) {
-    lhsDim_ = p->listexpdim_->size();
-    baseType_ = p->type_;
-    for (ExpDim* expDim : *p->listexpdim_) // Check each index is int
-        checkDimIsInt(expDim, env_);
-
-    if (rhsDim_ > lhsDim_) { // Check depth (exp vs type)
-        throw TypeError("Invalid depth when indexing array", p->line_number,
-                        p->char_number);
-    }
-}
-
-void IndexChecker::visitEVar(EVar* p) {
-    Type* varTy = env_.findVar(p->ident_, p->line_number, p->char_number);
-    if (typecode(varTy) != TypeCode::ARRAY)
-        throw TypeError("Indexing of non-array type", p->line_number, p->char_number);
-
-    Arr* arrTy = (Arr*)varTy;
-    lhsDim_ = arrTy->listdim_->size();
-    baseType_ = arrTy->type_;
-
-    if (rhsDim_ > lhsDim_) { // Check depth (exp vs type)
-        throw TypeError("Invalid depth when indexing array", p->line_number,
-                        p->char_number);
-    }
-}
-
-void IndexChecker::visitEApp(EApp* p) {
-    auto fnType = env_.findFn(p->ident_, p->line_number, p->char_number);
-    Type* retType = fnType.ret;
-    if (typecode(retType) != TypeCode::ARRAY)
-        throw TypeError("Indexing of non-array type", p->line_number, p->char_number);
-
-    Arr* arrTy = (Arr*)retType;
-    baseType_ = arrTy->type_;
-    lhsDim_ = arrTy->listdim_->size();
-
-    if (rhsDim_ > lhsDim_) { // Check depth (exp vs type)
-        throw TypeError("Invalid depth when indexing array", p->line_number,
-                        p->char_number);
-    }
-}
-
-/********************   Helper functions    ********************/
-
-std::string toString(TypeCode t) {
 std::string toString(TypeCode t) {
     switch (t) {
     case TypeCode::INT: return "int";
@@ -278,6 +150,13 @@ bool typesEqual(Type* left, Type* right) {
         }
     }
     return typecode(left) == typecode(right);
+}
+
+ListDim* newArrayWithNDimensions(int N) {
+    ListDim* listDim = new ListDim;
+    for (int i = 0; i < N; i++)
+        listDim->push_back(new Dimension);
+    return listDim;
 }
 
 } // namespace jlc::typechecker

@@ -18,8 +18,6 @@ class TypeInferrer : public ValueVisitor<ETyped*> {
   public:
     explicit TypeInferrer(Env& env) : env_(env) {}
 
-    static ListDim* newArrayWithNDimensions(int N);
-
     void visitELitInt(ELitInt* p) override;
     void visitELitDoub(ELitDoub* p) override;
     void visitELitFalse(ELitFalse* p) override;

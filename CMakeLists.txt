@@ -33,6 +33,8 @@ set(jlc-lib_SOURCE ${bnfc_SOURCE}
         src/Frontend/TypeCheckerEnv.cpp
         src/Frontend/StatementChecker.h
         src/Frontend/StatementChecker.cpp
+        src/Frontend/IndexChecker.h
+        src/Frontend/IndexChecker.cpp
         src/Frontend/TypeError.h
         src/LLVM-Backend/CodeGen.h
         src/LLVM-Backend/CodeGen.cpp

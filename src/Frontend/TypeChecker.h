@@ -44,6 +44,7 @@ OpCode opcode(Visitable* p);
 ETyped* infer(Visitable* p, Env& env);
 void checkDimIsInt(ExpDim* p, Env& env);
 bool typesEqual(Type* left, Type* right);
+ListDim* newArrayWithNDimensions(int N);
 
 //  Returns the OpCode for an Operation
 class OpCoder : public ValueVisitor<OpCode> {
@@ -74,104 +75,7 @@ class TypeCoder : public ValueVisitor<TypeCode> {
     void visitArr(Arr* p) override { Return(TypeCode::ARRAY); }
 };
 
-// Handles the type-checking for declarations, needed because the "children"
-// i.e. Init/NoInit, needs access to the type variable
-class DeclHandler : public VoidVisitor {
-    Env& env_;
-    Type* LHSType; // Holds the type of the declaration
-  public:
-    explicit DeclHandler(Env& env) : env_(env), LHSType(nullptr) {}
-
-    void visitDecl(Decl* p) override;
-    void visitListItem(ListItem* p) override;
-    void visitInit(Init* p) override;
-    void visitNoInit(NoInit* p) override;
-};
-
-// Checks that the function returns a value (for non-void). True if OK.
-class ReturnChecker : public ValueVisitor<bool> {
-    Env& env_;
-
-  public:
-    explicit ReturnChecker(Env& env) : env_(env) { v_ = false; }
-
-    void visitBStmt(BStmt* p) override;
-    void visitDecr(Decr* p) override;
-    void visitIncr(Incr* p) override;
-    void visitCond(Cond* p) override;
-    void visitCondElse(CondElse* p) override;
-    void visitWhile(While* p) override;
-    void visitFor(For* p) override;
-    void visitBlock(Block* p) override;
-    void visitDecl(Decl* p) override;
-    void visitListStmt(ListStmt* p) override;
-    void visitAss(Ass* p) override;
-    void visitRet(Ret* p) override;
-    void visitVRet(VRet* p) override;
-    void visitSExp(SExp* p) override;
-    void visitEmpty(Empty* p) override;
-    void visitEIndex(EIndex* p) override;
-};
-
-class IndexChecker : public ValueVisitor<ETyped*> {
-    Env& env_;
-    std::size_t rhsDim_; // Number of dimensions of expression
-    std::size_t lhsDim_; // Number of dimensions of indexed array
-    Type* baseType_;     // Base-type of arr
-
-  public:
-    explicit IndexChecker(Env& env)
-        : env_(env), rhsDim_(0), lhsDim_(0), baseType_(nullptr) {}
-
-    Type* getTypeOfIndexExpr(std::size_t lhsDim, std::size_t rhsDim, Type* baseType);
-
-    void visitEIndex(EIndex* p);
-    void visitEArrNew(EArrNew* p);
-    void visitEVar(EVar* p);
-    void visitEApp(EApp* p);
-
-    // These expressions are not allowed to be indexed!
-    void visitELitInt(ELitInt* p) override {
-        throw TypeError("Can't index integer literal", p->line_number, p->char_number);
-    }
-    void visitELitDoub(ELitDoub* p) override {
-        throw TypeError("Can't index double literal", p->line_number, p->char_number);
-    }
-    void visitELitFalse(ELitFalse* p) override {
-        throw TypeError("Can't index 'false' literal", p->line_number, p->char_number);
-    }
-    void visitELitTrue(ELitTrue* p) override {
-        throw TypeError("Can't index 'true' literal", p->line_number, p->char_number);
-    }
-    void visitEAdd(EAdd* p) override {
-        throw TypeError("Can't index 'Add' expression", p->line_number, p->char_number);
-    }
-    void visitEMul(EMul* p) override {
-        throw TypeError("Can't index 'Mul' expression", p->line_number, p->char_number);
-    }
-    void visitEOr(EOr* p) override {
-        throw TypeError("Can't index 'Or' expression", p->line_number, p->char_number);
-    }
-    void visitEAnd(EAnd* p) override {
-        throw TypeError("Can't index 'And' expression", p->line_number, p->char_number);
-    }
-    void visitNot(Not* p) override {
-        throw TypeError("Can't index 'Not' expression", p->line_number, p->char_number);
-    }
-    void visitNeg(Neg* p) override {
-        throw TypeError("Can't index 'Neg' expression", p->line_number, p->char_number);
-    }
-    void visitERel(ERel* p) override {
-        throw TypeError("Can't index 'Rel' expression", p->line_number, p->char_number);
-    }
-    void visitEString(EString* p) override {
-        throw TypeError("Can't index 'String' literal", p->line_number, p->char_number);
-    }
-    void visitEArrLen(EArrLen* p) override {
-        throw TypeError("Can't index 'length' method", p->line_number, p->char_number);
-    }
-};
-
+// Checks function definitions / args, then forwards to 'StatementChecker'
 class FunctionChecker : public VoidVisitor {
     Env& env_;
 
@@ -184,6 +88,7 @@ class FunctionChecker : public VoidVisitor {
     void visitArgument(Argument* p) override;
 };
 
+// Checks program level validity, then forwards to 'FunctionChecker'
 class ProgramChecker : public VoidVisitor {
     Env env_;
 

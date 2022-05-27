@@ -1,6 +1,9 @@
-#include "TypeInferrer.h"
+#include "Frontend/TypeInferrer.h"
+#include "Frontend/IndexChecker.h"
 
 namespace jlc::typechecker {
+
+//  Some helper functions
 
 bool TypeInferrer::typeIn(TypeCode t, std::initializer_list<TypeCode> list) {
     for (TypeCode elem : list) {
@@ -10,7 +13,6 @@ bool TypeInferrer::typeIn(TypeCode t, std::initializer_list<TypeCode> list) {
     return false;
 }
 
-// Could be arithmetic / relative
 auto TypeInferrer::checkBinExp(Expr* e1, Expr* e2, const std::string& op,
                                std::initializer_list<TypeCode> allowedTypes) {
     ETyped* e1Typed = Visit(e1);
@@ -46,8 +48,7 @@ void TypeInferrer::visitELitDoub(ELitDoub* p) { Return(new ETyped(p, new Doub));
 void TypeInferrer::visitELitFalse(ELitFalse* p) { Return(new ETyped(p, new Bool)); }
 void TypeInferrer::visitELitTrue(ELitTrue* p) { Return(new ETyped(p, new Bool)); }
 void TypeInferrer::visitEString(EString* p) { Return(new ETyped(p, new StringLit)); }
-
-// Variables
+         
 void TypeInferrer::visitEVar(EVar* p) {
     Type* varType = env_.findVar(p->ident_, p->line_number, p->char_number);
     Return(new ETyped(p, varType));
@@ -196,13 +197,6 @@ void TypeInferrer::visitEArrNew(EArrNew* p) {
 
     ListDim* listDim = newArrayWithNDimensions(dim);
     Return(new ETyped(p, new Arr(baseType, listDim)));
-}
-
-ListDim* TypeInferrer::newArrayWithNDimensions(int N) {
-    ListDim* listDim = new ListDim;
-    for (int i = 0; i < N; i++)
-        listDim->push_back(new Dimension);
-    return listDim;
 }
 
 }

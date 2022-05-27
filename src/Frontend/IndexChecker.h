@@ -20,25 +20,25 @@ class IndexChecker : public ValueVisitor<ETyped*> {
     //  arr[2][3]       EVar
     //  (new int[4])[3] EArrNew
     //  getArr()[2]     EApp
-    void visitEIndex(EIndex* p);
-    void visitEArrNew(EArrNew* p);
-    void visitEVar(EVar* p);
-    void visitEApp(EApp* p);
+    void visitEIndex(EIndex* p) override;
+    void visitEArrNew(EArrNew* p) override;
+    void visitEVar(EVar* p) override;
+    void visitEApp(EApp* p) override;
 
     // These expressions are not allowed to be indexed!
-    void visitELitInt(ELitInt* p);
-    void visitELitDoub(ELitDoub* p);
-    void visitELitFalse(ELitFalse* p);
-    void visitELitTrue(ELitTrue* p);
-    void visitEAdd(EAdd* p);
-    void visitEMul(EMul* p);
-    void visitEOr(EOr* p);
-    void visitEAnd(EAnd* p);
-    void visitNot(Not* p);
-    void visitNeg(Neg* p);
-    void visitERel(ERel* p);
-    void visitEString(EString* p);
-    void visitEArrLen(EArrLen* p);
+    void visitELitInt(ELitInt* p) override;
+    void visitELitDoub(ELitDoub* p) override;
+    void visitELitFalse(ELitFalse* p) override;
+    void visitELitTrue(ELitTrue* p) override;
+    void visitEAdd(EAdd* p) override;
+    void visitEMul(EMul* p) override;
+    void visitEOr(EOr* p) override;
+    void visitEAnd(EAnd* p) override;
+    void visitNot(Not* p) override;
+    void visitNeg(Neg* p) override;
+    void visitERel(ERel* p) override;
+    void visitEString(EString* p) override;
+    void visitEArrLen(EArrLen* p) override;
 };
 
 }

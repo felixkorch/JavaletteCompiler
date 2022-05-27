@@ -5,14 +5,6 @@ namespace jlc::typechecker {
 IndexChecker::IndexChecker(Env& env)
         : env_(env), rhsDim_(0), lhsDim_(0), baseType_(nullptr) {}
 
-Type* IndexChecker::getTypeOfIndexExpr(std::size_t lhsDim, std::size_t rhsDim,
-                                       Type* baseType) {
-    if (rhsDim == lhsDim)
-        return baseType;
-    ListDim* listDim = newArrayWithNDimensions(lhsDim - rhsDim);
-    return new Arr(baseType, listDim);
-}
-
 // Entry-point
 void IndexChecker::visitEIndex(EIndex* p) {
     rhsDim_++; // +1 dimensions
@@ -65,4 +57,53 @@ void IndexChecker::visitEApp(EApp* p) {
     }
 }
 
+// These expressions are not allowed to be indexed!
+void IndexChecker::visitELitInt(ELitInt* p) {
+    throw TypeError("Can't index integer literal", p->line_number, p->char_number);
 }
+void IndexChecker::visitELitDoub(ELitDoub* p) {
+    throw TypeError("Can't index double literal", p->line_number, p->char_number);
+}
+void IndexChecker::visitELitFalse(ELitFalse* p) {
+    throw TypeError("Can't index 'false' literal", p->line_number, p->char_number);
+}
+void IndexChecker::visitELitTrue(ELitTrue* p) {
+    throw TypeError("Can't index 'true' literal", p->line_number, p->char_number);
+}
+void IndexChecker::visitEAdd(EAdd* p) {
+    throw TypeError("Can't index 'Add' expression", p->line_number, p->char_number);
+}
+void IndexChecker::visitEMul(EMul* p) {
+    throw TypeError("Can't index 'Mul' expression", p->line_number, p->char_number);
+}
+void IndexChecker::visitEOr(EOr* p) {
+    throw TypeError("Can't index 'Or' expression", p->line_number, p->char_number);
+}
+void IndexChecker::visitEAnd(EAnd* p) {
+    throw TypeError("Can't index 'And' expression", p->line_number, p->char_number);
+}
+void IndexChecker::visitNot(Not* p) {
+    throw TypeError("Can't index 'Not' expression", p->line_number, p->char_number);
+}
+void IndexChecker::visitNeg(Neg* p) {
+    throw TypeError("Can't index 'Neg' expression", p->line_number, p->char_number);
+}
+void IndexChecker::visitERel(ERel* p) {
+    throw TypeError("Can't index 'Rel' expression", p->line_number, p->char_number);
+}
+void IndexChecker::visitEString(EString* p) {
+    throw TypeError("Can't index 'String' literal", p->line_number, p->char_number);
+}
+void IndexChecker::visitEArrLen(EArrLen* p) {
+    throw TypeError("Can't index 'length' method", p->line_number, p->char_number);
+}
+
+Type* IndexChecker::getTypeOfIndexExpr(std::size_t lhsDim, std::size_t rhsDim,
+                                       Type* baseType) {
+    if (rhsDim == lhsDim)
+        return baseType;
+    ListDim* listDim = newArrayWithNDimensions(lhsDim - rhsDim);
+    return new Arr(baseType, listDim);
+}
+
+} // namespace jlc::typechecker

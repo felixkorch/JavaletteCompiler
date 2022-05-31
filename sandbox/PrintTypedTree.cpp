@@ -29,10 +29,10 @@ int main(int argc, char** argv) {
 
     try {
         // Print program before typechecking
-        std::cout << printer->print(parser.getAST()) << std::endl;
+        std::cout << printer->print(parser.getAbsyn()) << std::endl;
 
         TypeChecker typeChecker;
-        typeChecker.run(parser.getAST());
+        typeChecker.run(parser.getAbsyn());
 
         // Print program after typechecking
         std::cout << printer->print(typeChecker.getAbsyn()) << std::endl;

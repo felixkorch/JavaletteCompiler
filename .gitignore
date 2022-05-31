@@ -30,3 +30,7 @@ flexbison
 premake5.exe
 .vs
 *.exe
+
+lib/prog
+
+lib/prog.ll

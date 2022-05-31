@@ -19,7 +19,7 @@ class Parser {
             throw std::exception();
     }
 
-    bnfc::Prog* getAST() {
+    bnfc::Prog* getAbsyn() {
         return p_;
     }
 };

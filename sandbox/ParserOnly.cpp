@@ -30,14 +30,14 @@ int main(int argc, char** argv) {
     TypeChecker typeChecker;
 
     try {
-        typeChecker.run(parser.getAST());
+        typeChecker.run(parser.getAbsyn());
     } catch(TypeError& t) {
         std::cerr << t.what() << std::endl;
         return 1;
     } */
 
     //auto printer = std::make_unique<bnfc::PrintAbsyn>();
-    //printer->print(parser.getAST());
+    //printer->print(parser.getAbsyn());
 
     std::cerr << "OK" << std::endl;
     return 0;

@@ -50,8 +50,6 @@ For.       Stmt ::= "for" "(" Type Ident ":" Expr ")" Stmt ;
 
 SExp.      Stmt ::= Expr  ";" ;
 
---SDelete    Stmt ::= "delete" Ident ;
-
 -- Types ---------------------------------------------------
 
 Dimension.  Dim ::= "[]" ;

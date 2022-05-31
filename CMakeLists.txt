@@ -26,7 +26,15 @@ set(jlc-lib_SOURCE ${bnfc_SOURCE}
         src/Common/BaseVisitor.cpp
         src/Common/BaseVisitor.h
         src/Frontend/TypeChecker.cpp
+        src/Frontend/TypeInferrer.cpp
+        src/Frontend/TypeInferrer.h
         src/Frontend/TypeChecker.h
+        src/Frontend/TypeCheckerEnv.h
+        src/Frontend/TypeCheckerEnv.cpp
+        src/Frontend/StatementChecker.h
+        src/Frontend/StatementChecker.cpp
+        src/Frontend/IndexChecker.h
+        src/Frontend/IndexChecker.cpp
         src/Frontend/TypeError.h
         src/LLVM-Backend/CodeGen.h
         src/LLVM-Backend/CodeGen.cpp
@@ -68,6 +76,7 @@ target_include_directories(jlc-lib
 	PUBLIC
     ${LLVM_INCLUDE_DIRS}
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>/src
 )
 
 set_target_properties(jlc-lib PROPERTIES

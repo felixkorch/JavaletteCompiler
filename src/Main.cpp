@@ -1,7 +1,7 @@
-#include "src/Common/Util.h"
-#include "src/LLVM-Backend/CodeGen.h"
-#include "src/Frontend/Parser.h"
-#include "src/Frontend/TypeChecker.h"
+#include "Common/Util.h"
+#include "LLVM-Backend/CodeGen.h"
+#include "Frontend/Parser.h"
+#include "Frontend/TypeChecker.h"
 #include <iostream>
 
 using namespace jlc;
@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     TypeChecker typeChecker;
 
     try {
-        typeChecker.run(parser.getAST());
+        typeChecker.run(parser.getAbsyn());
     } catch(TypeError& t) {
         std::cerr << t.what() << std::endl;
         return 1;

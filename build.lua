@@ -30,7 +30,7 @@ function gen()
     os.execute("bison -t -pjavalette_ bnfc/Javalette.y -o bnfc/Parser.C")
 end
 
-local install_name = "partC-1.tar.gz" -- Update each iteration
+local install_name = "partC-2.tar.gz" -- Update each iteration
 
 local function parse_args(args)
     if #args ~= 1 then
